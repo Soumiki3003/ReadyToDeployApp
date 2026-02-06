@@ -35,6 +35,14 @@
 - [ ] **Move `reembed_neo4j.py`** → `scripts/reembed_neo4j.py`
 - [ ] **Delete old `app.py`** — replaced by factory pattern
 
+### Background Tasks (Huey)
+- [ ] **Add `huey` to dependencies** — lightweight task queue
+- [ ] **Create `app/tasks/__init__.py`** — Huey instance configuration with Redis/SQLite backend
+- [ ] **Create `app/tasks/embeddings.py`** — async task for generating/updating embeddings
+- [ ] **Create `app/tasks/parsing.py`** — async task for dual-path document parsing
+- [ ] **Integrate with upload view** — trigger tasks on file upload, return job ID
+- [ ] **Add task status endpoint** — check progress via HTMX polling
+
 ---
 
 ## 🟡 Frontend (Jinja2 + DaisyUI + HTMX)
