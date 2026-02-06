@@ -26,14 +26,23 @@
 - [ ] **Create `app/views/upload.py`** — file upload routes
 - [ ] **Create `app/views/graph.py`** — graph API routes
 
-### File Migrations
-- [ ] **Move `parsers/`** → `app/services/parsers/`
-- [ ] **Move `neo4j_loader.py`** → `app/services/neo4j_loader.py`
-- [ ] **Move `supervisor_agent.py`** → `app/services/agents/supervisor.py`
-- [ ] **Move `companion_agent.py`** → `app/services/agents/companion.py`
-- [ ] **Move `extras.py`** → `app/services/rag.py`
-- [ ] **Move `reembed_neo4j.py`** → `scripts/reembed_neo4j.py`
-- [ ] **Delete old `app.py`** — replaced by factory pattern
+### Services (Merged Structure)
+- [ ] **Create `app/services/llm.py`** — shared `OllamaLLM` wrapper used by all agents
+- [ ] **Create `app/services/graph.py`** — Neo4j operations: loader, query, embeddings (merges `neo4j_loader.py`, `reembed_neo4j.py`)
+- [ ] **Create `app/services/rag.py`** — GraphRAG retrieval, context search (merges common logic from `supervisor_agent.py` + `extras.py`)
+- [ ] **Create `app/services/student.py`** — student state management, trajectory logging
+- [ ] **Create `app/services/agents/supervisor.py`** — supervisor agent logic (uses `rag.py`, `student.py`)
+- [ ] **Create `app/services/agents/companion.py`** — companion agent UI wrapper (uses supervisor)
+- [ ] **Move `parsers/`** → `app/services/parsers/` — dual-path parser + extractors
+- [ ] **Delete root files** — `app.py`, `extras.py`, `supervisor_agent.py`, `companion_agent.py`, `neo4j_loader.py`, `reembed_neo4j.py`
+
+### Storage (SQLModel)
+- [ ] **Add `sqlmodel` to dependencies** — SQLAlchemy + Pydantic models, production-ready
+- [ ] **Create `app/models/student.py`** — `Student`, `Trajectory` models with relationships
+- [ ] **Create `app/models/upload.py`** — `Upload` model for file metadata
+- [ ] **Create `app/services/database.py`** — engine, session factory, migrations
+- [ ] **Add SQLite for dev, PostgreSQL for prod** — configure via `config.yaml`
+- [ ] **Add to containers.py** — inject session factory via dependency-injector
 
 ### Background Tasks (Huey)
 - [ ] **Add `huey` to dependencies** — lightweight task queue
