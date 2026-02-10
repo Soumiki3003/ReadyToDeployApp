@@ -13,7 +13,20 @@ core:
       handlers: [console]
       level: ${LOG_LEVEL:INFO}
 
+  uploads:
+    allowed_extensions: ${ALLOWED_EXTENSIONS:pdf,pptx,html}
+
+agents:
+  default:
+    model: "ollama:llama3"
+  knowledge_file:
+    model: "ollama:llama3"
+
 gateways:
+  rag:
+    indexes:
+      trajectory: ${TRAJECTORY_RAG_INDEX_NAME:trajectory_rag_index}
+      
   neo4j:
     uri: ${NEO4J_URI:bolt://localhost:7687}
     user: ${NEO4J_USER:neo4j}
@@ -30,11 +43,3 @@ gateways:
 flask:
   secret_key: ${SECRET_KEY:dev-secret}
   debug: ${FLASK_DEBUG:true}
-
-upload:
-  folder: app/static/uploads
-  max_size_mb: 16
-  allowed_extensions:
-    - pdf
-    - pptx
-    - html

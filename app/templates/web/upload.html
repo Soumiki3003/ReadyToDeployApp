@@ -5,26 +5,33 @@
 <div class="hero min-h-screen">
   <div class="card w-[500px] bg-primary text-primary-content shadow-xl">
     <div class="card-body">
-      <h2 class="card-title text-2xl justify-center">Upload Course Materials</h2>
+      <h2 class="card-title text-2xl justify-center">Upload Course
+        Materials</h2>
 
-      <form hx-post="{{ url_for('upload.upload_files') }}" hx-target="#upload-result" hx-swap="innerHTML"
+      <form hx-post="{{ url_for('upload.upload_files') }}"
+        hx-target="#upload-result" hx-swap="innerHTML"
         hx-encoding="multipart/form-data" hx-indicator="#upload-spinner">
 
         <div class="form-control">
-          <label class="label"><span class="label-text text-primary-content">Upload Files (.pdf)</span></label>
-          <input type="file" name="files" multiple accept=".pdf,.pptx"
+          <label class="label"><span class="label-text text-primary-content">
+              Upload Files
+            </span></label>
+          <input type="file" name="files" multiple
+            accept="{{ allowed_extensions|join(',') }}"
             class="file-input file-input-bordered file-input-accent w-full">
         </div>
 
         <div class="form-control mt-4">
-          <label class="label"><span class="label-text text-primary-content">HTML Link</span></label>
+          <label class="label"><span
+              class="label-text text-primary-content">HTML Link</span></label>
           <input type="text" name="html_link" placeholder="https://example.com"
             class="input input-bordered bg-primary-focus">
         </div>
 
         <div class="card-actions justify-center mt-6">
           <button type="submit" class="btn btn-accent w-full">
-            <span id="upload-spinner" class="htmx-indicator loading loading-spinner"></span>
+            <span id="upload-spinner"
+              class="htmx-indicator loading loading-spinner"></span>
             Submit
           </button>
         </div>

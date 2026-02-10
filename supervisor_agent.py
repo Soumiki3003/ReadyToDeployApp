@@ -13,6 +13,7 @@ from langchain_community.llms import Ollama
 from dataclasses import dataclass
 import threading
 
+
 @dataclass
 class LLMResponse:
     content: str
@@ -38,7 +39,11 @@ class OllamaLLM:
         self.llm = Ollama(model=model_name)
 
     def invoke(self, prompt: str, message_history=None, system_instruction=None):
-        full_prompt = f"{system_instruction}\n\nUser Query:\n{prompt}" if system_instruction else prompt
+        full_prompt = (
+            f"{system_instruction}\n\nUser Query:\n{prompt}"
+            if system_instruction
+            else prompt
+        )
         response = self.llm.invoke(full_prompt)
         return LLMResponse(content=response)
 
@@ -51,9 +56,7 @@ class OllamaLLM:
 
 # === 4️⃣ Initialize VectorRetriever + GraphRAG ===
 retriever = VectorRetriever(
-    driver=driver,
-    index_name="vectorIndexCTF",
-    embedder=embeddings
+    driver=driver, index_name="vectorIndexCTF", embedder=embeddings
 )
 llm = OllamaLLM("llama3")
 graph_rag = GraphRAG(retriever, llm)
@@ -63,11 +66,13 @@ graph_rag = GraphRAG(retriever, llm)
 STATE_PATH = os.path.join("data", "student_state.json")
 os.makedirs("data", exist_ok=True)
 
+
 def load_student_state():
     if not os.path.exists(STATE_PATH):
         return {"students": []}
     with open(STATE_PATH, "r") as f:
         return json.load(f)
+
 
 def save_student_state(state):
     with open(STATE_PATH, "w") as f:
@@ -78,15 +83,13 @@ def save_student_state(state):
 def retrieve_context(student_id: str, query: str):
     print(f"\nRetrieving context for: '{query}' (student={student_id})")
 
-    start_time = time.time()   # 🟩 NEW: Track time start
+    start_time = time.time()  # 🟩 NEW: Track time start
 
     result = graph_rag.search(
-        query_text=query,
-        retriever_config={"top_k": 5},
-        return_context=True
+        query_text=query, retriever_config={"top_k": 5}, return_context=True
     )
 
-    end_time = time.time()     # 🟩 NEW: Track time end
+    end_time = time.time()  # 🟩 NEW: Track time end
     response_time = round(end_time - start_time, 2)  # 🟩 NEW: duration in seconds
 
     # === Load existing student state ===
@@ -96,7 +99,9 @@ def retrieve_context(student_id: str, query: str):
 
     # === Retrieve node metadata safely ===
     retrieved_nodes, scores = [], []
-    if hasattr(result, "retriever_result") and getattr(result, "retriever_result", None):
+    if hasattr(result, "retriever_result") and getattr(
+        result, "retriever_result", None
+    ):
         try:
             for item in result.retriever_result.items:
                 node_name = "Unknown"
@@ -114,9 +119,14 @@ def retrieve_context(student_id: str, query: str):
     q_lower = query.lower()
     if "hint" in q_lower:
         interaction_type = "hint_request"
-    elif any(word in q_lower for word in ["code", "script", "function", "write", "implement"]):
+    elif any(
+        word in q_lower for word in ["code", "script", "function", "write", "implement"]
+    ):
         interaction_type = "code_request"
-    elif any(word in q_lower for word in ["concept", "explain", "definition", "understand", "what is"]):
+    elif any(
+        word in q_lower
+        for word in ["concept", "explain", "definition", "understand", "what is"]
+    ):
         interaction_type = "concept_request"
     else:
         interaction_type = "context_request"
@@ -141,9 +151,9 @@ def retrieve_context(student_id: str, query: str):
                 try:
                     past_emb = embeddings.embed_query(past_query)
                     # Cosine similarity
-                    dot = sum(a*b for a, b in zip(current_emb, past_emb))
-                    mag1 = sum(a*a for a in current_emb) ** 0.5
-                    mag2 = sum(a*a for a in past_emb) ** 0.5
+                    dot = sum(a * b for a, b in zip(current_emb, past_emb))
+                    mag1 = sum(a * a for a in current_emb) ** 0.5
+                    mag2 = sum(a * a for a in past_emb) ** 0.5
                     cosine_sim = dot / (mag1 * mag2)
                     if cosine_sim >= semantic_threshold:
                         query_repeat_count += 1
@@ -175,11 +185,22 @@ def retrieve_context(student_id: str, query: str):
         hint_prompt = f"Provide a short, encouraging hint to help the student progress on: '{query}'. Context nodes: {retrieved_nodes[:3]}"
         hint_text = llm.invoke(hint_prompt).content.strip()
         print(f"💡 Hint triggered: {hint_reason}\n→ {hint_text}")
-    
+
     elif student_entry and len(student_entry["trajectory"]) >= 3:
         # Check last 3 queries for procedural patterns
         recent_queries = [t["query"].lower() for t in student_entry["trajectory"][-3:]]
-        procedural_keywords = ["run", "fix", "load", "execute", "implement", "solve", "compile", "test", "error", "code"]
+        procedural_keywords = [
+            "run",
+            "fix",
+            "load",
+            "execute",
+            "implement",
+            "solve",
+            "compile",
+            "test",
+            "error",
+            "code",
+        ]
 
         def is_procedural(q):
             return any(k in q for k in procedural_keywords)
@@ -205,10 +226,10 @@ def retrieve_context(student_id: str, query: str):
         "interaction_type": interaction_type,
         "query_repeat_count": query_repeat_count + 1,
         "node_entry_count": node_entry_count,
-        "response_time_sec": response_time,           
-        "hint_triggered": hint_triggered,             
-        "hint_reason": hint_reason,                   
-        "hint_text": hint_text                        
+        "response_time_sec": response_time,
+        "hint_triggered": hint_triggered,
+        "hint_reason": hint_reason,
+        "hint_text": hint_text,
     }
 
     if student_entry:
@@ -219,7 +240,9 @@ def retrieve_context(student_id: str, query: str):
     state["students"] = students
     save_student_state(state)
 
-    print(f"✅ Context retrieval logged. ({interaction_type}, {node_entry_count} nodes, {response_time}s)")
+    print(
+        f"✅ Context retrieval logged. ({interaction_type}, {node_entry_count} nodes, {response_time}s)"
+    )
 
     return result
 
@@ -269,4 +292,6 @@ if __name__ == "__main__":
         with open("logs/context_debug.txt", "a") as f:
             f.write(f"\n\n[Query: {query}]\n")
             f.write(f"Answer: {clean_answer}\n")
-            f.write(f"Retriever Context: {getattr(result, 'retriever_result', 'N/A')}\n")
+            f.write(
+                f"Retriever Context: {getattr(result, 'retriever_result', 'N/A')}\n"
+            )

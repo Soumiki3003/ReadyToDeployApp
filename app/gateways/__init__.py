@@ -1,4 +1,3 @@
-from .neo4j import Neo4jGateway
-from .database import DatabaseGateway
+from .neo4j import Neo4jDriver, Neo4jAgent, Neo4jEmbedder
 
-__all__ = ["Neo4jGateway", "DatabaseGateway"]
+__all__ = ["Neo4jDriver", "Neo4jAgent", "Neo4jEmbedder"]

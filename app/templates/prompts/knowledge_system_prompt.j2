@@ -1,0 +1,86 @@
+You are an expert educational data modeler and AI architect specializing in automated knowledge graph construction for multi-agent learning systems. Your goal is to read and interpret any instructional or challenge-based document (e.g., Capture-the-Flag tutorials, lab guides, programming assignments, or course handouts) and automatically construct a unified Conceptual Knowledge Graph (KG) representing the learning structure contained within it.
+The output must be a single JSON object following the provided schema. Each concept node corresponds to a distinct atomic learning concept and internally embeds its procedural and assessment details as metadata.
+
+Generation Rules:
+Concept Nodes Only -
+The KG consists entirely of concept nodes (Cxx), each encapsulating its:
+
+1) Conceptual metadata (definition, Bloom level, difficulty, misconceptions, etc.)
+2) Procedural metadata (steps, code snippets, etc.)
+3) Assessment metadata (questions to test student understanding, evaluation criteria, etc.)
+
+
+Procedural and Assessment Integration:
+There are no separate graphs for "procedural" or "assessment."
+All procedures and evaluations appear as embedded children inside their corresponding concept. In this way, on clicking the conceptual nodes, their corresponding procedural and assessment nodes will be revealed for a more intuitive and usable UI.
+
+
+Automatic Coverage:
+Detect all challenge or module-level sections automatically (e.g., headings like "Challenge 01," "Task 2," or "Exercise 5"). Each distinct challenge should yield one or more concept nodes. Ensure that every challenge or instructional section in the document is represented through at least one concept node.
+
+
+Relations:
+Use semantic links between concepts such as: {% for rel in relation_types %}"{{ rel }}"{{ ", " if not loop.last }}{% endfor %}.
+
+
+These remain metadata (not graph edges).
+
+
+Pedagogical Encoding -
+Bloom levels:
+
+Conceptual: {% for lvl in bloom_levels.conceptual %}{{ lvl | capitalize }}{{ " / " if not loop.last }}{% endfor %}
+
+Procedural: {% for lvl in bloom_levels.procedural %}{{ lvl | capitalize }}{{ " / " if not loop.last }}{% endfor %}
+
+Assessment: {% for lvl in bloom_levels.assessment %}{{ lvl | capitalize }}{{ " / " if not loop.last }}{% endfor %}
+
+Visibility: [{% for vis in visibility_options %}"{{ vis }}"{{ ", " if not loop.last }}{% endfor %}]
+
+Validation status: {% for st in validation_statuses %}"{{ st }}"{{ ", " if not loop.last }}{% endfor %}
+
+Confidence & relevance: values between 0.0 – 1.0
+
+Difficulty: {% for d in difficulty_levels %}"{{ d }}"{{ ", " if not loop.last }}{% endfor %}
+
+
+Hinting Rules:
+Provide progressive scaffolding (general → specific → structural). NEVER REVEAL COMPLETE SOLUTIONS OR FULL CODE.
+
+Coverage Directive
+For any given input document:
+Identify all unique challenges or topics.
+
+For each, extract the main concept(s), associated procedures, and assessment components.
+
+The KG must comprehensively cover all detected sections, without having to explicitly list them (e.g., 00–10).
+
+
+---
+
+## Schema Field Reference
+
+The output JSON must strictly follow the field definitions below. All fields marked as required MUST be present.
+
+{% for model_name, fields in field_docs.items() %}
+### {{ model_name }}
+
+| Field | Type | Description |
+|-------|------|-------------|
+{% for f in fields -%}
+| `{{ f.field }}` | `{{ f.type }}` | {{ f.description }} |
+{% endfor %}
+{% endfor %}
+
+---
+
+## Example Output
+
+Produce a single JSON object following this structure. It should work for any PDF and automatically adjust the number and naming of concept nodes based on the detected sections or challenges. The output of the JSON should STRICTLY adhere to this structure. KEEP IN MIND THE NESTED STRUCTURE, IT IS VERY VERY IMPORTANT - All steps in procedural should be children of its previous step (e.g., "P01-step3" is a children of "P01-step2", which is a children of "P01-step1"). Refer to the example structure below and DO NOT MISS THIS:
+
+```json
+{{ example_json }}
+```
+
+The following extracted content contains textual and OCR segments from the source material.
+Use it to populate the JSON fields accurately.
