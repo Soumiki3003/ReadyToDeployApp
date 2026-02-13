@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Self
-from pydantic import BaseModel, Field, computed_field, model_validator
-from uuid import uuid4
 from enum import StrEnum
+from typing import Any, Literal, Self
+from uuid import uuid4
+
+from pydantic import BaseModel, Field, computed_field
 
 
 class KnowledgeDifficulty(StrEnum):
@@ -136,7 +137,7 @@ class ConceptualKnowledge(BaseChildKnowledge):
         description="List of conceptual connections from this knowledge node to others, used for structuring the knowledge graph and providing explanations to students",
     )
 
-    children: list["ProceduralKnowledge" | "AssessmentKnowledge"] = Field(
+    children: list[ProceduralKnowledge | AssessmentKnowledge] = Field(
         default_factory=list,
         description="List of child nodes in the knowledge graph, used for hierarchical structuring and traversal. Must avoid circular references.",
     )
@@ -201,7 +202,7 @@ class ProceduralKnowledge(BaseChildKnowledge):
         examples=[0.0, 50.0, 100.0],
     )
 
-    children: Self | None = Field(
+    child: Self | None = Field(
         None,
         description="The next step in the procedure, used for structuring the knowledge graph and providing explanations to students. Must avoid circular references.",
     )

@@ -30,85 +30,20 @@ from pydantic_ai import Tool as PydanticAiTool
 logger = logging.getLogger(__name__)
 
 
-class Neo4jSession:
-    def __init__(self, driver: Driver, **session_kwargs):
-        self.__driver = driver
-        self.__session_kwargs = session_kwargs
-
-    def __enter__(self):
-        logger.info("Opening Neo4j session")
-        self.__session = self.__driver.session(**self.__session_kwargs)
-        return self.__session
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        logger.info("Closing Neo4j session")
-        self.__session.close()
-
-
-class Neo4jDriver:
-    def __init__(self, uri: str, *, user: str, password: str):
-        self.__uri = uri
-        self.__user = user
-        self.__password = password
-
-    def __enter__(self):
-        auth = (
-            (self.__user, self.__password) if self.__user and self.__password else None
-        )
-        self.__driver = GraphDatabase.driver(self.__uri, auth=auth)
-        logger.info(f"Connected to Neo4j at {self.__uri} with user {self.__user}")
-        return self.__driver
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__driver.close()
-        logger.info("Neo4j driver closed")
-
-    @contextmanager
-    def session(self, **session_kwargs):
-        with Neo4jSession(self.__driver, **session_kwargs) as session:
-            yield session
-
-
 @contextmanager
 def neo4j_driver(uri: str, *, user: str, password: str):
     auth = (user, password) if user and password else None
     driver = GraphDatabase.driver(uri, auth=auth)
     logger.info(f"Connected to Neo4j at {uri} with user {user}")
-    return driver
+    yield driver
+    driver.close()
+    logger.info("Neo4j driver closed")
 
 
 @contextmanager
 def neo4j_session(driver: Driver, **session_kwargs):
     with driver.session(**session_kwargs) as session:
         yield session
-
-
-class Neo4jDatabase:
-    def __init__(self, uri: str, *, user: str, password: str):
-        self.__uri = uri
-        self.__user = user
-        self.__password = password
-
-    def __enter__(self):
-        auth = (
-            (self.__user, self.__password) if self.__user and self.__password else None
-        )
-        self.__driver = GraphDatabase.driver(self.__uri, auth=auth)
-        logger.info(f"Connected to Neo4j at {self.__uri} with user {self.__user}")
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__driver.close()
-        logger.info("Neo4j driver closed")
-
-    @property
-    def driver(self):
-        return self.__driver
-
-    @contextmanager
-    def session(self, **session_kwargs):
-        with Neo4jSession(self.__driver, **session_kwargs) as session:
-            yield session
 
 
 class Neo4jAgent(LLMInterface):

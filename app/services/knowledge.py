@@ -1,15 +1,11 @@
-from contextlib import AbstractContextManager
-import json
 import logging
 from pathlib import Path
-from typing import Callable
-from jinja2 import Template
-from neo4j import Session, ManagedTransaction, unit_of_work
-from neo4j_graphrag.indexes import upsert_vectors
-from neo4j_graphrag.generation import GraphRAG
-import pydantic_ai
-from app import services, models
 
+import pydantic_ai
+from neo4j import ManagedTransaction, Session, Transaction, unit_of_work
+from neo4j_graphrag.generation import GraphRAG
+
+from app import models, services
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +17,14 @@ class KnowledgeService:
     def __init__(
         self,
         *,
-        session_factory: Callable[..., AbstractContextManager[Session]],
+        session: Session,
         graph_rag: GraphRAG,
         agent: pydantic_ai.Agent,
         file_service: services.FileService,
         static_folder: Path,
     ):
         self.__agent = agent
-        self.__session_factory = session_factory
+        self.__session = session
         self.__graph_rag = graph_rag
         self.__file_service = file_service
         self.__static_folder = static_folder
@@ -72,7 +68,7 @@ class KnowledgeService:
 
     # def __create_nodes_and_relationships(
     #     self,
-    #     tx: ManagedTransaction,
+    #     tx: Transaction,
     #     node: dict,
     #     parent_id: str | None = None,
     # ):
@@ -176,20 +172,20 @@ class KnowledgeService:
     #             )
     #         self.__create_nodes_and_relationships(tx, child, parent_id=node_id)
 
-    def get_knowledge(self, knowledge_id: str) -> models.RootKnowledge:
-        @unit_of_work
-        def txn_fn(tx: ManagedTransaction) -> models.RootKnowledge:
+    def get_knowledge(self, knowledge_id: str) -> models.Knowledge:
+        @unit_of_work()
+        def txn_fn(tx: ManagedTransaction, knowledge_id: str) -> models.Knowledge:
             query = """
-            MATCH (root {id: $id})
+            MATCH (root {id: $id, type: $root_type})
             CALL {
                 WITH root
-                MATCH (root)-[:HAS_CHILD*0..]->(n)
+                MATCH (root)-[:$child_rel*0..]->(n)
                 RETURN collect(distinct n) + root AS nodes
             }
             CALL {
                 WITH nodes
                 UNWIND nodes AS n
-                OPTIONAL MATCH (n)-[:HAS_CHILD]->(c)
+                OPTIONAL MATCH (n)-[:$child_rel]->(c)
                 WHERE c IN nodes
                 RETURN collect(distinct {parent: n.id, child: c.id}) AS child_edges
             }
@@ -203,7 +199,10 @@ class KnowledgeService:
             RETURN nodes, child_edges, other_edges
             """
             result = tx.run(
-                query, id=knowledge_id, child_rel=self.__child_relation_type
+                query,
+                id=knowledge_id,
+                root_type=models.KnowledgeType.ROOT,
+                child_rel=self.__child_relation_type,
             )
             record = result.single()
             if not record or not record["nodes"]:
@@ -244,7 +243,12 @@ class KnowledgeService:
                     {"relation": relation, "to": to_id}
                 )
 
-            def build_node(node_id: str, path: set[str]) -> models.Knowledge:
+            def build_node(
+                *,
+                node_id: str,
+                path: set[str],
+                nodes_by_id: dict[str, dict],
+            ) -> models.Knowledge:
                 if node_id in path:
                     raise ValueError(
                         f"Cycle detected in knowledge tree at node '{node_id}'"
@@ -261,7 +265,10 @@ class KnowledgeService:
                 child_ids = sorted(children_map.get(node_id, []))
 
                 if node_id == knowledge_id:
-                    children = [build_node(cid, path) for cid in child_ids]
+                    children = [
+                        build_node(node_id=cid, path=path, nodes_by_id=nodes_by_id)
+                        for cid in child_ids
+                    ]
                     props["children"] = children
                     path.remove(node_id)
                     return models.RootKnowledge(**props)
@@ -274,7 +281,9 @@ class KnowledgeService:
                                 "Procedural node '%s' has multiple children; using the first",
                                 node_id,
                             )
-                        child_node = build_node(child_ids[0], path)
+                        child_node = build_node(
+                            node_id=child_ids[0], path=path, nodes_by_id=nodes_by_id
+                        )
                     props["children"] = child_node
                     path.remove(node_id)
                     return models.ProceduralKnowledge(**props)
@@ -287,21 +296,27 @@ class KnowledgeService:
                 props["connections"] = stored_connections + connections_map.get(
                     node_id, []
                 )
-                props["children"] = [build_node(cid, path) for cid in child_ids]
+                props["children"] = [
+                    build_node(node_id=cid, path=path, nodes_by_id=nodes_by_id)
+                    for cid in child_ids
+                ]
                 path.remove(node_id)
                 return models.ConceptualKnowledge(**props)
 
-            return build_node(knowledge_id, set())
+            return build_node(
+                node_id=knowledge_id,
+                path=set([]),
+                nodes_by_id=nodes_by_id,
+            )
 
-        with self.__session_factory() as session:
-            return session.execute_read(txn_fn)
+        return self.__session.execute_read(txn_fn, knowledge_id=knowledge_id)
 
     def create_knowledge_from_file(self, file_path: Path) -> str:
         textual = self.__file_service.extract_textual_content(file_path)
         visual = self.__file_service.extract_visual_content(file_path)
-        user_prompt = f"""The following extracted content contains textual and OCR segments from the source material. 
+        user_prompt = f"""The following extracted content contains textual and OCR segments from the source material.
         Use it to populate the JSON fields accurately:
-        
+
         ## Extracted Textual Content:
         ```
         {textual}
@@ -339,20 +354,21 @@ class KnowledgeService:
         parent_id: str,
         item: models.AssessmentKnowledge,
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> models.AssessmentKnowledge:
         query = (
             "MATCH (parent {id: $parent_id}) "
             "WHERE parent.type = $parent_type "
             "CREATE (n:Assessment $props) "
-            f"MERGE (parent)-[:{self.__child_relation_type}]->(n) "
+            "MERGE (parent)-[:$child_relation_type]->(n) "
             "RETURN n"
         )
         result = tx.run(
-            query,
+            query,  # pyright: ignore[reportArgumentType]
             parent_id=parent_id,
             parent_type=models.KnowledgeType.ASSESSMENT.value,
             props=item.model_dump(by_alias=True, exclude={"children"}),
+            child_relation_type=self.__child_relation_type,
         )
         record = result.single()
         if not record:
@@ -364,23 +380,24 @@ class KnowledgeService:
         parent_id: str,
         item: models.ProceduralKnowledge,
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> models.ProceduralKnowledge:
         query = (
             "MATCH (parent {id: $parent_id}) "
             "WHERE parent.type IN $parent_types "
             "CREATE (n:Procedure $props) "
-            f"MERGE (parent)-[:{self.__child_relation_type}]->(n) "
+            "MERGE (parent)-[:$child_relation_type]->(n) "
             "RETURN n"
         )
         result = tx.run(
-            query,
+            query,  # pyright: ignore[reportArgumentType]
             parent_id=parent_id,
             parent_types=[
                 models.KnowledgeType.CONCEPTUAL.value,
                 models.KnowledgeType.PROCEDURAL.value,
             ],
             props=item.model_dump(by_alias=True, exclude={"children"}),
+            child_relation_type=self.__child_relation_type,
         )
         record = result.single()
         if not record:
@@ -392,33 +409,36 @@ class KnowledgeService:
         parent_id: str,
         item: models.ConceptualKnowledge,
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> models.ConceptualKnowledge:
         query = (
             "MATCH (parent {id: $parent_id}) "
             "WHERE parent.type = $parent_type "
             "CREATE (n:Concept $props) "
-            f"MERGE (parent)-[:{self.__child_relation_type}]->(n) "
+            "MERGE (parent)-[:$child_relation_type]->(n) "
             "RETURN n"
         )
         result = tx.run(
-            query,
+            query,  # pyright: ignore[reportArgumentType]
             parent_id=parent_id,
             parent_type=item.type_.value,
             props=item.model_dump(by_alias=True, exclude={"children"}),
+            child_relation_type=self.__child_relation_type,
         )
         record = result.single()
         if not record:
             raise ValueError("Failed to create conceptual node in Neo4j")
 
         for conn in item.connections:
+            conn_query = (
+                "MATCH (a {{id:$from_id}}), (b {{id:$to_id}}) "
+                "MERGE (a)-[:{$relation}]->(b) "
+            )
             tx.run(
-                f"""
-                MATCH (a {{id:$from_id}}), (b {{id:$to_id}})
-                MERGE (a)-[:{conn.relation}]->(b)
-                """,
+                conn_query,
                 from_id=item.id,
                 to_id=conn.to,
+                relation=conn.relation,
             )
         return models.ConceptualKnowledge(**record["n"])
 
@@ -427,7 +447,7 @@ class KnowledgeService:
         node_id: str,
         connections: list[models.ConceptualKnowledgeConnection],
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> None:
         # === Validate that all target nodes exist before making any changes ===
         for conn in connections:
@@ -450,20 +470,22 @@ class KnowledgeService:
 
         # === Create new relationships from this node to targets ===
         for conn in connections:
+            conn_query = (
+                "MATCH (a {{id:$from_id}}), (b {{id:$to_id}}) "
+                "MERGE (a)-[:{$relation}]->(b) "
+            )
             tx.run(
-                f"""
-                    MATCH (a {{id:$from_id}}), (b {{id:$to_id}})
-                    MERGE (a)-[:{conn.relation}]->(b)
-                    """,
+                conn_query,
                 from_id=node_id,
                 to_id=conn.to,
+                relation=conn.relation.value,
             )
 
     def __create_root_knowledge_node(
         self,
         item: models.RootKnowledge,
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> models.RootKnowledge:
         query = "CREATE (n:Concept $props) RETURN n"
         # TODO: Use a schema in future
@@ -480,76 +502,85 @@ class KnowledgeService:
         item: models.Knowledge,
         parent_id: str | None = None,
         *,
-        tx: ManagedTransaction,
+        tx: Transaction,
     ) -> str:
-
         logger.info(
             f"Creating knowledge node with name '{item.name}' and ID '{item.id}' under parent ID '{parent_id}'"
         )
         if isinstance(item, models.RootKnowledge):
             logger.debug("Creating root knowledge node")
-            new_parent_id = self.__create_root_knowledge_node(item, tx=tx)
-        elif isinstance(item, models.ConceptualKnowledge):
-            logger.debug("Creating conceptual knowledge node")
-            new_parent_id = self.__create_conceptual_knowledge_node(
-                parent_id, item, tx=tx
-            )
-        elif isinstance(item, models.AssessmentKnowledge):
-            logger.debug("Creating assessment knowledge node")
-            new_parent_id = self.__create_assessment_knowledge_node(
-                parent_id, item, tx=tx
-            )
-        elif isinstance(item, models.ProceduralKnowledge):
-            logger.debug("Creating procedural knowledge node")
-            new_parent_id = self.__create_procedural_knowledge_node(
-                parent_id, item, tx=tx
-            )
+            new_parent = self.__create_root_knowledge_node(item, tx=tx)
         else:
-            raise TypeError(f"Unsupported knowledge type: {type(item)}")
+            if parent_id is None:
+                raise ValueError("Parent ID is required for non-root knowledge nodes")
+            if isinstance(item, models.ConceptualKnowledge):
+                logger.debug("Creating conceptual knowledge node")
+                new_parent = self.__create_conceptual_knowledge_node(
+                    parent_id, item, tx=tx
+                )
+            elif isinstance(item, models.AssessmentKnowledge):
+                logger.debug("Creating assessment knowledge node")
+                new_parent = self.__create_assessment_knowledge_node(
+                    parent_id, item, tx=tx
+                )
+            elif isinstance(item, models.ProceduralKnowledge):
+                logger.debug("Creating procedural knowledge node")
+                new_parent = self.__create_procedural_knowledge_node(
+                    parent_id, item, tx=tx
+                )
+            else:
+                raise TypeError(f"Unsupported knowledge type: {type(item)}")
 
-        logger.info(f"Successfully created node with ID '{new_parent_id}' in Neo4j")
+        logger.info(f"Successfully created node with ID '{new_parent.id}' in Neo4j")
         logger.debug(
-            f"Recursively creating child nodes for parent ID '{new_parent_id}'"
-        )
-        for child in item.children:
-            self.__create_knowledge_graph(child, parent_id=new_parent_id, tx=tx)
-        logger.debug(
-            f"Finished creating all child nodes for parent ID '{new_parent_id}'"
+            f"Recursively creating child nodes for parent ID '{new_parent.id}'"
         )
 
-        return new_parent_id
+        if isinstance(item, models.ProceduralKnowledge):
+            item_children = [item.child] if item.child else []
+        elif not isinstance(item, models.AssessmentKnowledge):
+            item_children = item.children
+        else:
+            item_children = []
+
+        for child in item_children:
+            self.__create_knowledge_graph(child, parent_id=new_parent.id, tx=tx)
+        logger.debug(
+            f"Finished creating all child nodes for parent ID '{new_parent.id}'"
+        )
+
+        return new_parent.id
 
     def create_knowledge(self, root: models.RootKnowledge) -> str:
-        with self.__session_factory() as session:
-            tx = session.begin_transaction()
-            try:
-                logger.info(
-                    f"Starting creation of knowledge graph for root node '{root.name}'"
-                )
-                root_id = self.__create_knowledge_graph(root, tx=tx)
-                logger.info(
-                    f"Completed creation of knowledge graph with root ID '{root_id}'"
-                )
+        tx = self.__session.begin_transaction()
+        try:
+            logger.info(
+                f"Starting creation of knowledge graph for root node '{root.name}'"
+            )
+            root_id = self.__create_knowledge_graph(root, tx=tx)
+            logger.info(
+                f"Completed creation of knowledge graph with root ID '{root_id}'"
+            )
+            logger.debug(
+                f"Updating conceptual knowledge relationships for root ID '{root_id}'"
+            )
+            for child in root.children:
                 logger.debug(
-                    f"Updating conceptual knowledge relationships for root ID '{root_id}'"
+                    f"Updating relationships for child node '{child.name}' with ID '{child.id}'"
                 )
-                for child in root.children:
-                    logger.debug(
-                        f"Updating relationships for child node '{child.name}' with ID '{child.id}'"
-                    )
-                    self.__update_conceptual_knowledge_relationships(
-                        child.id, child.connections, tx=tx
-                    )
-                logger.debug(
-                    f"Finished updating relationships for all child nodes of root ID '{root_id}'"
+                self.__update_conceptual_knowledge_relationships(
+                    child.id, child.connections, tx=tx
                 )
-            except Exception as e:
-                logger.error(f"Error creating knowledge graph: {e}")
-                tx.rollback()
-                raise
-            else:
-                tx.commit()
-                return root_id
+            logger.debug(
+                f"Finished updating relationships for all child nodes of root ID '{root_id}'"
+            )
+        except Exception as e:
+            logger.error(f"Error creating knowledge graph: {e}")
+            tx.rollback()
+            raise
+        else:
+            tx.commit()
+            return root_id
 
     # def reembed_nodes(self) -> None:
     #     logger.info("Re-embedding all nodes in Neo4j")

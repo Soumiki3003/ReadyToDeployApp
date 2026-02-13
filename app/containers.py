@@ -78,7 +78,7 @@ class Gateways(containers.DeclarativeContainer):
     ai = providers.DependenciesContainer()
 
     neo4j = providers.Resource(
-        gateways.Neo4jDriver,
+        gateways.neo4j_driver,
         uri=config.neo4j.uri,
         user=config.neo4j.user,
         password=config.neo4j.password,
@@ -86,7 +86,7 @@ class Gateways(containers.DeclarativeContainer):
 
     neo4j_agent = providers.Singleton(
         gateways.Neo4jAgent,
-        model_name=ai.config.default.model.required(),
+        model_name=ai.config.provided.default.model.required(),
     )
 
     embedder = providers.Singleton(

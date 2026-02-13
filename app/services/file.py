@@ -1,13 +1,14 @@
 import io
-from pathlib import Path
-from PIL import Image
-
-from bs4 import BeautifulSoup
-import fitz
 import logging
-from pdf2image import convert_from_path
-from pptx import Presentation
+from pathlib import Path
+
+import fitz
 import pytesseract
+from bs4 import BeautifulSoup
+from pdf2image import convert_from_path
+from PIL import Image
+from pptx import Presentation
+
 from app import schemas
 
 logger = logging.getLogger(__name__)
@@ -19,24 +20,38 @@ class FileService:
 
         if filepath.suffix == ".pdf":
             doc = fitz.open(filepath)
-            for i, page in enumerate(doc, 1):
+            for i, page in enumerate(doc.pages(), 1):
                 text = page.get_text("text").strip()
                 if text:
-                    text_data.append(schemas.PaginatedTextualContent(page=i, text=text))
+                    text_data.append(
+                        schemas.PaginatedTextualContent(
+                            page=i, text=text, from_image=False
+                        )
+                    )
 
         elif filepath.suffix == ".pptx":
-            prs = Presentation(filepath)
+            prs = Presentation(filepath.as_posix())
             for i, slide in enumerate(prs.slides, 1):
                 slide_text = " ".join(
-                    shape.text for shape in slide.shapes if hasattr(shape, "text")
+                    getattr(shape, "text")
+                    for shape in slide.shapes
+                    if hasattr(shape, "text")
                 )
-                text_data.append(schemas.SlideTextualContent(slide=i, text=slide_text))
+                text_data.append(
+                    schemas.SlideTextualContent(
+                        slide=i, text=slide_text, from_image=False
+                    )
+                )
 
         elif filepath.suffix == ".html":
             with open(filepath, "r", encoding="utf-8") as f:
                 soup = BeautifulSoup(f, "html.parser")
             body_text = soup.get_text(separator=" ", strip=True)
-            text_data.append(schemas.HTMLTextualContent(section="html", text=body_text))
+            text_data.append(
+                schemas.HTMLTextualContent(
+                    section="html", text=body_text, from_image=False
+                )
+            )
 
         else:
             logger.warning(
@@ -60,11 +75,13 @@ class FileService:
                     )
 
         elif filepath.suffix == ".pptx":
-            prs = Presentation(filepath)
+            prs = Presentation(filepath.as_posix())
             for i, slide in enumerate(prs.slides, 1):
                 for shape in slide.shapes:
                     if shape.shape_type == 13:  # picture
-                        image = shape.image
+                        image = getattr(shape, "image", None)
+                        if image is None:
+                            continue
                         image_bytes = io.BytesIO(image.blob)
                         img = Image.open(image_bytes)
                         ocr_text = pytesseract.image_to_string(img)

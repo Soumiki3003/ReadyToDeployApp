@@ -1,18 +1,18 @@
 from datetime import datetime, timezone
-from typing import Any
+
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class Student(BaseModel):
-    id: Any | None = None
+    id: str | None = None
     name: str = Field(min_length=2)
     email: EmailStr
     password: str = Field(min_length=8)
-    enabled: bool = Field(default=True, index=True)
+    enabled: bool = True
 
 
 class StudentTrajectory(BaseModel):
-    id: Any | None = None
+    id: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     query: str
     retrieved_nodes: list[str] = Field(default_factory=list)
@@ -21,11 +21,11 @@ class StudentTrajectory(BaseModel):
     query_repeat_count: int = Field(0, ge=0)
     node_entry_count: int = Field(0, ge=0)
     response_time_sec: float = Field(0.0, ge=0.0)
-    hint_triggered: bool = Field(default=False, index=True)
+    hint_triggered: bool = False
     hint_reason: str | None = None
     hint_text: str | None = None
 
-    student_id: Any
+    student_id: str
 
     @model_validator(mode="after")
     def validate_scores_length(self):

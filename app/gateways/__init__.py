@@ -1,3 +1,8 @@
-from .neo4j import Neo4jDriver, Neo4jAgent, Neo4jEmbedder
+from .neo4j import Neo4jAgent, Neo4jEmbedder, neo4j_driver, neo4j_session
 
-__all__ = ["Neo4jDriver", "Neo4jAgent", "Neo4jEmbedder"]
+__all__ = [
+    "Neo4jAgent",
+    "Neo4jEmbedder",
+    "neo4j_driver",
+    "neo4j_session",
+]

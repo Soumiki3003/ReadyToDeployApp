@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class CreateStudent(BaseModel):
@@ -13,9 +13,3 @@ class UpdateStudent(BaseModel):
     email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=8)
     enabled: bool | None = None
-
-    @field_validator("email")
-    def validate_email(cls, v):
-        if v is not None and not isinstance(v, EmailStr):
-            raise ValueError("Invalid email address")
-        return v
