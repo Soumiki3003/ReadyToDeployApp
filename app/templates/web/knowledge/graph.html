@@ -153,11 +153,16 @@
         return "badge-neutral";
     }
 
+    function normalizeNodeType(nodeType) {
+        return String(nodeType || "root").toLowerCase();
+    }
+
     function getNodeColor(nodeType) {
-        if (nodeType === "root") return "#E879F9";
-        if (nodeType === "conceptual") return "#60A5FA";
-        if (nodeType === "procedural") return "#34D399";
-        if (nodeType === "assessment") return "#F59E0B";
+        const normalized = normalizeNodeType(nodeType);
+        if (normalized === "root") return "#E879F9";
+        if (normalized === "conceptual") return "#60A5FA";
+        if (normalized === "procedural") return "#34D399";
+        if (normalized === "assessment") return "#F59E0B";
         return "#9CA3AF";
     }
 
@@ -187,13 +192,16 @@
 
         function addNode(node) {
             if (!node || !node.id || nodeMap.has(node.id)) return;
+            const nodeType = normalizeNodeType(node.type);
+            const color = getNodeColor(nodeType);
             nodeMap.set(node.id, {
                 id: node.id,
                 label: (node.label || node.name || node.id).substring(0, 20),
-                type: node.type || "root",
+                type: nodeType,
                 style: {
-                    fill: getNodeColor(node.type || "root"),
+                    fill: color,
                     stroke: "#1F2937",
+                    lineWidth: 2,
                 },
             });
         }
@@ -247,18 +255,21 @@
             width,
             height,
             modes: {
-                default: ["drag-canvas", "zoom-canvas", "drag-node"],
+                default: ["drag-canvas", "zoom-canvas"],
             },
             layout: {
-                type: "force",
-                preventOverlap: true,
-                nodeSize: 50,
-                linkDistance: 180,
-                nodeStrength: -400,
-                edgeStrength: 0.7,
+                type: "dagre",
+                rankdir: "LR",
+                nodesep: 60,
+                ranksep: 120,
+                controlPoints: true,
             },
             defaultNode: {
                 size: 50,
+                style: {
+                    stroke: "#1F2937",
+                    lineWidth: 2,
+                },
                 labelCfg: {
                     style: {
                         fill: "#1F2937",
@@ -267,7 +278,11 @@
                 },
             },
             defaultEdge: {
-                type: "line",
+                type: "polyline",
+                style: {
+                    radius: 10,
+                    endArrow: true,
+                },
                 labelCfg: {
                     autoRotate: true,
                     style: {
@@ -281,10 +296,28 @@
                     },
                 },
             },
+            fitView: true,
+            fitViewPadding: 20,
         });
+
+        graph.node((node) => ({
+            style: {
+                fill: getNodeColor(node.type),
+                stroke: "#1F2937",
+                lineWidth: 2,
+            },
+            labelCfg: {
+                style: {
+                    fill: "#1F2937",
+                    fontSize: 12,
+                },
+            },
+        }));
 
         graph.data(data);
         graph.render();
+
+        graph.fitView();
     }
 
     async function loadGraph() {
@@ -308,9 +341,9 @@
             const graph = await response.json();
             const nodes = flattenNodes(graph);
 
-            const conceptualCount = nodes.filter((n) => n.type === "conceptual").length;
-            const proceduralCount = nodes.filter((n) => n.type === "procedural").length;
-            const assessmentCount = nodes.filter((n) => n.type === "assessment").length;
+            const conceptualCount = nodes.filter((n) => normalizeNodeType(n.type) === "conceptual").length;
+            const proceduralCount = nodes.filter((n) => normalizeNodeType(n.type) === "procedural").length;
+            const assessmentCount = nodes.filter((n) => normalizeNodeType(n.type) === "assessment").length;
 
             stats.total.textContent = String(nodes.length);
             stats.conceptual.textContent = String(conceptualCount);

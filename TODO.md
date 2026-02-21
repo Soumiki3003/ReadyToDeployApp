@@ -13,6 +13,7 @@
 - [ ] Wire upload success to graph view handoff (carry upload/root id)
 - [ ] Add graph data endpoint for UI consumption
 - [ ] Render fake-generated graph path in `templates/web/knowledge/graph.html`
+- [ ] Fix graph node coloring so each node type (root/conceptual/procedural/assessment) is visually distinct
 - [ ] Show upload processing/completed/failed status in upload list/view
 - [ ] Document local fake-gen workflow in `README.md`
 
