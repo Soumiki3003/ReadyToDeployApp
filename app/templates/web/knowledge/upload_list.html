@@ -7,6 +7,7 @@
             <th>Created</th>
             <th>Updated</th>
             <th>Knowledge ID</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
@@ -39,10 +40,21 @@
                 <code class="text-xs">{{ upload.knowledge_id[:8] }}...</code>
                 {% else %} - {% endif %}
             </td>
+            <td>
+                {% if upload.knowledge_id %}
+                <a
+                    href="{{ url_for('knowledge.graph', knowledge_id=upload.knowledge_id) }}"
+                    class="btn btn-xs btn-primary"
+                    >View Graph</a
+                >
+                {% else %}
+                <span class="text-xs opacity-50">Waiting</span>
+                {% endif %}
+            </td>
         </tr>
         {% if upload.error_message %}
         <tr>
-            <td colspan="5" class="bg-error/10">
+            <td colspan="6" class="bg-error/10">
                 <div class="alert alert-error">
                     <span>{{ upload.error_message }}</span>
                 </div>

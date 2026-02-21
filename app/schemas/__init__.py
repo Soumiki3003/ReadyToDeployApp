@@ -1,5 +1,10 @@
 from .student import CreateStudent, UpdateStudent
-from .knowledge import KnowledgeUploadRequest, KnowledgeUploadResponse
+from .knowledge import (
+    KnowledgeUploadRequest,
+    KnowledgeUploadResponse,
+    KnowledgeIdsRequest,
+    KnowledgeRootNode,
+)
 from .file import (
     PaginatedTextualContent,
     SlideTextualContent,
@@ -12,6 +17,8 @@ __all__ = [
     "UpdateStudent",
     "KnowledgeUploadRequest",
     "KnowledgeUploadResponse",
+    "KnowledgeIdsRequest",
+    "KnowledgeRootNode",
     "PaginatedTextualContent",
     "SlideTextualContent",
     "HTMLTextualContent",

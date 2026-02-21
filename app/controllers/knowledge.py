@@ -146,3 +146,35 @@ class KnowledgeController:
         except Exception as e:
             self.__logger.error(f"Failed to retrieve uploads: {e}", exc_info=True)
             raise
+
+    def get_knowledge(self, knowledge_id: str):
+        self.__logger.debug(f"Fetching knowledge graph for ID: {knowledge_id}")
+        if not knowledge_id:
+            raise ValueError("knowledge_id is required")
+        try:
+            return self.__knowledge_service.get_knowledge(knowledge_id)
+        except Exception as e:
+            self.__logger.error(
+                f"Failed to fetch knowledge graph for ID {knowledge_id}: {e}",
+                exc_info=True,
+            )
+            raise
+
+    def get_root_nodes(
+        self, page: int = 1, page_size: int = 5
+    ) -> list[schemas.KnowledgeRootNode]:
+        self.__logger.debug(f"Fetching root nodes (page={page}, page_size={page_size})")
+        if page <= 0 or page_size <= 0:
+            raise ValueError("Page and page_size must be positive integers")
+
+        try:
+            return self.__knowledge_service.get_root_nodes(
+                limit=page_size,
+                offset=(page - 1) * page_size,
+            )
+        except Exception as e:
+            self.__logger.error(
+                f"Failed to retrieve root nodes: {e}",
+                exc_info=True,
+            )
+            raise

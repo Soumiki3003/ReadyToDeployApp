@@ -16,6 +16,23 @@ class KnowledgeUploadRequest(BaseModel):
     )
 
 
+class KnowledgeIdsRequest(BaseModel):
+    page: int = Field(1, ge=1, description="Page number for pagination")
+    page_size: int = Field(5, ge=1, le=50, description="Number of items per page")
+
+
+class KnowledgeRootNode(BaseModel):
+    id: str = Field(description="Knowledge graph root node ID")
+    name: str | None = Field(
+        default=None,
+        description="Root node display name",
+    )
+    source: str | None = Field(
+        default=None,
+        description="Source metadata associated with the root node",
+    )
+
+
 class KnowledgeUploadResponse(BaseModel):
     uploaded: list[Path]
     html_link: str | None

@@ -1,715 +1,357 @@
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <title>Expandable CTF Knowledge Graph</title>
-        <style>
-            body {
-                background: #fcf9ea;
-                color: #97a87a;
-                font-family: sans-serif;
-                overflow: hidden;
-            }
-            .link {
-                stroke: #5a7863;
-                stroke-opacity: 0.6;
-                marker-end: url(#arrow);
-            }
-            .edge-label {
-                fill: #ccc;
-                font-size: 10px;
-                pointer-events: none;
-                text-anchor: middle;
-            }
-            .node text {
-                fill: #3b4953;
-                font-size: 12px;
-                pointer-events: none;
-            }
+{% extends "base.html" %}
+{% block title %}Knowledge Graph - KnowledgeGraph{% endblock %}
 
-            #meta-panel {
-                position: fixed;
-                top: 0;
-                right: -400px;
-                width: 400px;
-                height: 100%;
-                background: #2c2c2c;
-                color: white;
-                box-shadow: -4px 0 8px rgba(0, 0, 0, 0.4);
-                transition: right 0.3s ease-in-out;
-                z-index: 20;
-                display: flex;
-                flex-direction: column;
-            }
-            #meta-panel.open {
-                right: 0;
-            }
-            #meta-content {
-                flex: 1;
-                overflow-y: auto;
-                padding: 15px;
-            }
-            #meta-panel h3 {
-                margin-top: 0;
-                color: #6fa8dc;
-            }
-
-            #node-controls {
-                position: fixed;
-                bottom: 15px;
-                left: 15px;
-                background: rgba(40, 40, 40, 0.9);
-                padding: 10px;
-                border-radius: 8px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-                z-index: 30;
-            }
-            #node-controls button {
-                margin: 4px;
-                padding: 6px 10px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: bold;
-            }
-            #add-node {
-                background: #93c47d;
-                color: black;
-            }
-            #delete-node {
-                background: #e06666;
-                color: white;
-            }
-
-            .edit-field {
-                width: 100%;
-                background: #555;
-                color: white;
-                border: none;
-                margin: 3px 0;
-                font-size: 12px;
-                padding: 5px;
-            }
-            .save-btn {
-                margin-top: 8px;
-                padding: 6px 10px;
-                background: #6fa8dc;
-                border: none;
-                border-radius: 4px;
-                color: black;
-                font-weight: bold;
-                cursor: pointer;
-                width: 100%;
-            }
-
-            .popup {
-                position: fixed;
-                bottom: 70px;
-                left: 15px;
-                background: rgba(50, 50, 50, 0.95);
-                border: 1px solid #444;
-                border-radius: 8px;
-                padding: 12px;
-                width: 260px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-                color: white;
-                transform: translateY(150%);
-                opacity: 0;
-                transition: all 0.3s ease-in-out;
-                z-index: 50;
-            }
-            .popup.open {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            .popup label {
-                display: block;
-                margin-top: 6px;
-                font-size: 12px;
-            }
-            .popup input,
-            .popup select {
-                width: 100%;
-                margin-top: 3px;
-                padding: 4px;
-                background: #555;
-                border: none;
-                color: white;
-                border-radius: 4px;
-            }
-            .popup button {
-                margin-top: 10px;
-                width: 100%;
-                padding: 6px;
-                border: none;
-                border-radius: 4px;
-                background: #6fa8dc;
-                color: black;
-                font-weight: bold;
-                cursor: pointer;
-            }
-        </style>
-    </head>
-    <body>
-        <svg width="1300" height="900"></svg>
-
-        <div id="meta-panel"></div>
-        <div id="node-controls">
-            <button id="add-node">+ Add Node</button>
-            <button id="delete-node">– Delete Node</button>
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold">Knowledge Graph</h1>
+            <p class="text-sm opacity-70">
+                Hierarchical distribution of conceptual, procedural, and assessment nodes.
+            </p>
         </div>
 
-        <div id="add-popup" class="popup">
-            <h4>Add Node</h4>
-            <label>Node Type</label>
-            <select id="add-type">
-                <option value="C">Concept</option>
-                <option value="P">Procedure</option>
-                <option value="A">Assessment</option>
-            </select>
-
-            <label>From (source node ID)</label>
-            <input type="text" id="add-from" placeholder="e.g., C01" />
-
-            <label>To (target node name)</label>
-            <input type="text" id="add-to" placeholder="e.g., New Concept" />
-
-            <button id="confirm-add">Add</button>
-        </div>
-
-        <div id="delete-popup" class="popup">
-            <h4>Delete Node</h4>
-            <label>Node Type</label>
-            <select id="delete-type">
-                <option value="C">Concept</option>
-                <option value="P">Procedure</option>
-                <option value="A">Assessment</option>
-            </select>
-
-            <label>Node Name</label>
+        <div class="join w-full lg:w-auto">
             <input
+                id="knowledge-id-input"
                 type="text"
-                id="delete-name"
-                placeholder="e.g., Symbolic Execution"
+                class="input input-bordered join-item w-full lg:w-96"
+                placeholder="Paste knowledge ID"
+                value="{{ request.args.get('knowledge_id', '') }}"
             />
-
-            <button id="confirm-delete">Delete</button>
+            <button id="load-graph-btn" class="btn btn-primary join-item">
+                Load
+            </button>
         </div>
-
-        <script src="https://d3js.org/d3.v7.min.js"></script>
-        <script>
-            d3.json("/graph-root").then(function (root) {
-                const svg = d3.select("svg"),
-                    width = +svg.attr("width"),
-                    height = +svg.attr("height");
-                const color = d3
-                    .scaleOrdinal()
-                    .domain(["C", "P", "A"])
-                    .range(["#FFD966", "#6FA8DC", "#93C47D"]);
-                const metaPanel = document.getElementById("meta-panel");
-
-                let nodes = [],
-                    links = [];
-                nodes.push(root);
-                if (root.children) {
-                    root.children
-                        .filter((d) => d.id && d.id.startsWith("C"))
-                        .forEach((c) => {
-                            nodes.push(c);
-                            // ✅ only connect conceptual nodes to root
-                            links.push({
-                                source: root.id,
-                                target: c.id,
-                                relation: "HAS_CONCEPT",
-                            });
-                        });
-                }
-
-                const simulation = d3
-                    .forceSimulation(nodes)
-                    .force(
-                        "link",
-                        d3
-                            .forceLink(links)
-                            .id((d) => d.id)
-                            .distance(180)
-                            .strength(1),
-                    )
-                    .force("charge", d3.forceManyBody().strength(-600))
-                    .force("center", d3.forceCenter(width / 2, height / 2))
-                    .force(
-                        "collision",
-                        d3
-                            .forceCollide()
-                            .radius((d) => (d.id.startsWith("C") ? 45 : 30))
-                            .strength(0.8),
-                    )
-                    .velocityDecay(0.8)
-                    .alphaDecay(0.02);
-
-                svg.append("defs")
-                    .append("marker")
-                    .attr("id", "arrow")
-                    .attr("viewBox", "0 -5 10 10")
-                    .attr("refX", 22)
-                    .attr("refY", 0)
-                    .attr("markerWidth", 6)
-                    .attr("markerHeight", 6)
-                    .attr("orient", "auto")
-                    .append("path")
-                    .attr("d", "M0,-5L10,0L0,5")
-                    .attr("fill", "#aaa");
-
-                const linkGroup = svg.append("g").attr("class", "links");
-                const labelGroup = svg.append("g").attr("class", "labels");
-                const nodeGroup = svg.append("g").attr("class", "nodes");
-                let link = linkGroup.selectAll("line");
-                let edgeLabel = labelGroup.selectAll(".edge-label");
-                let node = nodeGroup.selectAll(".node");
-
-                function update() {
-                    link = link.data(
-                        links,
-                        (d) =>
-                            `${d.source.id || d.source}-${d.target.id || d.target}`,
-                    );
-                    link.exit().remove();
-                    const linkEnter = link
-                        .enter()
-                        .append("line")
-                        .attr("class", "link")
-                        .style("opacity", 0);
-                    link = linkEnter.merge(link);
-                    linkEnter
-                        .transition()
-                        .duration(1200)
-                        .ease(d3.easeCubicOut)
-                        .style("opacity", 1);
-
-                    edgeLabel = edgeLabel.data(
-                        links,
-                        (d) =>
-                            `${d.source.id || d.source}-${d.target.id || d.target}`,
-                    );
-                    edgeLabel.exit().remove();
-                    const labelEnter = edgeLabel
-                        .enter()
-                        .append("text")
-                        .attr("class", "edge-label")
-                        .text((d) => d.relation || "")
-                        .style("opacity", 0);
-                    edgeLabel = labelEnter.merge(edgeLabel);
-                    labelEnter
-                        .transition()
-                        .duration(1200)
-                        .delay(600)
-                        .ease(d3.easeCubicOut)
-                        .style("opacity", 1);
-
-                    node = node.data(nodes, (d) => d.id);
-                    node.exit().remove();
-                    const nodeEnter = node
-                        .enter()
-                        .append("g")
-                        .attr("class", "node")
-                        .call(
-                            d3
-                                .drag()
-                                .on("start", dragstarted)
-                                .on("drag", dragged)
-                                .on("end", dragended),
-                        );
-
-                    nodeEnter
-                        .append("circle")
-                        .attr("r", (d) =>
-                            d.id.startsWith("C")
-                                ? 25
-                                : d.id.startsWith("P")
-                                  ? 15
-                                  : 10,
-                        )
-                        .attr("fill", (d) => color(d.id[0]))
-                        .style("opacity", 0)
-                        .on("click", function (event, d) {
-                            if (event.detail === 1) {
-                                setTimeout(() => {
-                                    if (event.detail === 1)
-                                        expandNode(event, d);
-                                }, 200);
-                            }
-                        })
-                        .on("dblclick", function (event, d) {
-                            showMetadata(event, d);
-                        });
-
-                    nodeEnter
-                        .append("text")
-                        .attr("x", 8)
-                        .attr("y", 4)
-                        .text((d) => d.name || d.id)
-                        .style("opacity", 0);
-
-                    node = nodeEnter.merge(node);
-                    nodeEnter
-                        .select("circle")
-                        .transition()
-                        .duration(1500)
-                        .delay((d, i) => i * 150)
-                        .ease(d3.easeCubicOut)
-                        .style("opacity", 1);
-                    nodeEnter
-                        .select("text")
-                        .transition()
-                        .duration(1500)
-                        .delay((d, i) => i * 150 + 400)
-                        .ease(d3.easeCubicOut)
-                        .style("opacity", 1);
-
-                    simulation.nodes(nodes);
-                    simulation.force("link").links(links);
-                    simulation.alpha(0.3).restart();
-                }
-
-                // ✅ updated expandNode() to load children dynamically from Neo4j
-                function expandNode(event, d) {
-                    event.stopPropagation();
-                    if (d.expanded) return;
-                    d.expanded = true;
-
-                    fetch(`/expand-node/${d.id}`)
-                        .then((res) => res.json())
-                        .then((children) => {
-                            if (!children || !children.length) return;
-
-                            const newNodes = children.filter(
-                                (child) =>
-                                    !nodes.find((n) => n.id === child.id),
-                            );
-                            newNodes.forEach((child) => {
-                                child.x = d.x;
-                                child.y = d.y;
-                            });
-                            nodes.push(...newNodes);
-
-                            children.forEach((child) => {
-                                let relType = "HAS_CHILD";
-                                if (child.id.startsWith("P"))
-                                    relType = "PROCEDURAL_FOR";
-                                else if (child.id.startsWith("A"))
-                                    relType = "ASSESSES";
-                                else if (child.id.startsWith("C"))
-                                    relType = "HAS_CONCEPT";
-                                links.push({
-                                    source: d.id,
-                                    target: child.id,
-                                    relation: relType,
-                                });
-                            });
-
-                            d.children = children;
-                            update();
-                        });
-                }
-
-                // === Metadata side panel (persistent in memory) ===
-                //   function showMetadata(event,d){
-                //     event.stopPropagation();
-                //     metaPanel.innerHTML = `
-                //   <div id="meta-content">
-                //     <h3>${d.name||d.id}</h3>
-                //   </div>
-                //   <button class='add-attr-btn'>+ Add Attribute</button>
-                //   <button class='save-btn'>Save Changes</button>
-                // `;
-                // metaPanel.querySelector(".add-attr-btn").onclick = ()=>{
-                //   const key = prompt("Enter new attribute name (e.g., 'difficulty')");
-                //   if(!key) return;
-                //   const value = prompt(`Enter value for "${key}"`);
-                //   if(value === null) return;
-
-                //   // Add new input field dynamically
-                //   const metaContent = document.getElementById("meta-content");
-                //   metaContent.innerHTML += `<b>${key}:</b> <input class='edit-field' data-key='${key}' value="${value}"><br>`;
-
-                //   // Add to node data structure immediately
-                //   d[key] = value;
-                // };
-                // const metaContent = document.getElementById("meta-content");
-
-                // for (const [key, val] of Object.entries(d)) {
-                //   if (["id","name","children","x","y","vx","vy","fx","fy","index","expanded"].includes(key)) continue;
-                //   if (Array.isArray(val) && val.length && typeof val[0] === "object") {
-                //     metaContent.innerHTML += `<b>${key}:</b><br>`;
-                //     val.forEach((obj,i)=>{
-                //       Object.entries(obj).forEach(([subkey,subval])=>{
-                //         metaContent.innerHTML += `<input class='edit-field' data-key='${key}.${i}.${subkey}' value="${subval}"><br>`;
-                //       });
-                //     });
-                //   } else if (Array.isArray(val)) {
-                //     metaContent.innerHTML += `<b>${key}:</b> <input class='edit-field' data-key='${key}' value="${val.join(", ")}"><br>`;
-                //   } else {
-                //   // 👇 If the key is "source" and it’s a link, show a clickable "View Source"
-                //   if (key === "source" && typeof val === "string" && val.startsWith("/static/")) {
-                //     metaContent.innerHTML += `<b>${key}:</b>
-                //       <a href="${val}" target="_blank" style="color:#6FA8DC;">View Source</a><br>`;
-                //   } else {
-                //     metaContent.innerHTML += `<b>${key}:</b>
-                //       <input class='edit-field' data-key='${key}' value="${val}"><br>`;
-                //   }
-                // }
-                // }
-                //     metaPanel.classList.add("open");
-
-                //     metaPanel.querySelector(".save-btn").onclick = ()=>{
-                //         metaPanel.querySelectorAll(".edit-field").forEach(input=>{
-                //             const path=input.getAttribute("data-key").split(".");
-                //             let ref=d;
-                //             for(let i=0;i<path.length-1;i++){
-                //             ref = ref[path[i]];
-                //             }
-                //             ref[path[path.length-1]]=input.value;
-                //         });
-
-                //   // ✅ Send to backend (Neo4j update)
-                //         fetch("/update_node", {
-                //             method: "POST",
-                //             headers: { "Content-Type": "application/json" },
-                //             body: JSON.stringify(d)
-                //         })
-                //         .then(res => res.json())
-                //         .then(data => {
-                //             if (data.status === "updated") {
-                //             alert("✅ Node updated in Neo4j!");
-                //             } else {
-                //             alert("⚠️ Update failed: " + JSON.stringify(data));
-                //             }
-                //         })
-                //         .catch(err => alert("❌ Error saving node: " + err));
-                // };
-
-                //     document.body.onclick = (e)=>{
-                //       if(!metaPanel.contains(e.target)) metaPanel.classList.remove("open");
-                //     };
-                //   }
-
-                function showMetadata(event, d) {
-                    event.stopPropagation();
-                    metaPanel.innerHTML = `
-    <div id="meta-content">
-      <h3>${d.name || d.id}</h3>
     </div>
-    <button class='add-attr-btn'>+ Add Attribute</button>
-    <button class='save-btn'>Save Changes</button>
-  `;
 
-                    // === Add Attribute button ===
-                    metaPanel.querySelector(".add-attr-btn").onclick = () => {
-                        const key = prompt(
-                            "Enter new attribute name (e.g., 'difficulty')",
-                        );
-                        if (!key) return;
-                        const value = prompt(`Enter value for "${key}"`);
-                        if (value === null) return;
+    <div id="graph-status" class="alert alert-info">
+        <span>Provide a knowledge ID and click Load.</span>
+    </div>
 
-                        const metaContent =
-                            document.getElementById("meta-content");
-                        metaContent.innerHTML += `<b>${key}:</b> <input class='edit-field' data-key='${key}' value="${value}"><br>`;
-                        d[key] = value; // add to node
-                    };
+    <div class="card bg-base-100 shadow-md border border-base-300">
+        <div class="card-body">
+            <h2 class="card-title">Available Root Nodes</h2>
+            {% if root_nodes %}
+            <div class="overflow-x-auto">
+                <table class="table table-zebra">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Knowledge ID</th>
+                            <th>Source</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for root in root_nodes %}
+                        <tr>
+                            <td class="font-medium">{{ root.name or 'Central node' }}</td>
+                            <td><code class="text-xs">{{ root.id }}</code></td>
+                            <td class="text-sm">{{ root.source or '-' }}</td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="btn btn-xs btn-outline btn-primary select-knowledge-id"
+                                    data-knowledge-id="{{ root.id }}"
+                                >
+                                    Load Graph
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex items-center justify-between">
+                <div class="text-sm opacity-70">
+                    Page {{ page }} · {{ root_nodes|length }} item(s)
+                </div>
+                <div class="join">
+                    {% if page > 1 %}
+                    <a
+                        class="btn btn-sm join-item"
+                        href="{{ url_for('knowledge.graph', page=page-1, page_size=page_size, knowledge_id=request.args.get('knowledge_id')) }}"
+                    >
+                        Previous
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm join-item btn-disabled">Previous</button>
+                    {% endif %}
 
-                    const metaContent = document.getElementById("meta-content");
+                    {% if has_next %}
+                    <a
+                        class="btn btn-sm join-item"
+                        href="{{ url_for('knowledge.graph', page=page+1, page_size=page_size, knowledge_id=request.args.get('knowledge_id')) }}"
+                    >
+                        Next
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm join-item btn-disabled">Next</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <span>No root nodes found yet.</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
-                    // === Attribute rendering ===
-                    for (const [key, val] of Object.entries(d)) {
-                        if (
-                            [
-                                "id",
-                                "name",
-                                "children",
-                                "x",
-                                "y",
-                                "vx",
-                                "vy",
-                                "fx",
-                                "fy",
-                                "index",
-                                "expanded",
-                            ].includes(key)
-                        )
-                            continue;
+    <div class="stats stats-vertical lg:stats-horizontal shadow bg-base-100 w-full">
+        <div class="stat">
+            <div class="stat-title">Total Nodes</div>
+            <div id="stat-total" class="stat-value text-primary">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Conceptual</div>
+            <div id="stat-conceptual" class="stat-value text-warning">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Procedural</div>
+            <div id="stat-procedural" class="stat-value text-info">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Assessment</div>
+            <div id="stat-assessment" class="stat-value text-success">0</div>
+        </div>
+    </div>
 
-                        if (
-                            Array.isArray(val) &&
-                            val.length &&
-                            typeof val[0] === "object"
-                        ) {
-                            metaContent.innerHTML += `<b>${key}:</b><br>`;
-                            val.forEach((obj, i) => {
-                                Object.entries(obj).forEach(
-                                    ([subkey, subval]) => {
-                                        metaContent.innerHTML += `<input class='edit-field' data-key='${key}.${i}.${subkey}' value="${subval}"><br>`;
-                                    },
-                                );
-                            });
-                        } else if (Array.isArray(val)) {
-                            metaContent.innerHTML += `<b>${key}:</b> <input class='edit-field' data-key='${key}' value="${val.join(", ")}"><br>`;
-                        } else {
-                            // === 🔧 Enhanced source display with page info ===
-                            if (key === "source" && typeof val === "string") {
-                                const match = val.match(
-                                    /([A-Za-z0-9_\-]+)\s*\[page\s*([0-9\-–, ]+)\]/i,
-                                );
-                                let link = val,
-                                    label = "";
-                                if (match) {
-                                    const baseName = match[1].trim();
-                                    const pages = match[2].trim();
-                                    link = `/static/uploads/${baseName}.pdf#page=${pages.split("-")[0]}`;
-                                    label = ` (pages ${pages})`;
-                                } else if (
-                                    val.startsWith("/static/") ||
-                                    val.endsWith(".pdf")
-                                ) {
-                                    link = val;
-                                }
+    <div class="card bg-base-100 shadow-md border border-base-300">
+        <div class="card-body">
+            <h2 class="card-title">Graph View</h2>
+            <div id="graph-container" class="w-full rounded-box border border-base-300 bg-base-200" style="height: 34rem"></div>
+        </div>
+    </div>
+</div>
 
-                                metaContent.innerHTML += `
-          <b>${key}:</b>
-          <div style="margin-top:4px; margin-bottom:6px;">
-            <a href="${link}" target="_blank" style="color:#6FA8DC; text-decoration:underline;">📄 View Source</a>${label}
-          </div>
-          <input class='edit-field' data-key='${key}' value="${val}" style="display:none;">
-        `;
-                            } else {
-                                metaContent.innerHTML += `<b>${key}:</b>
-          <input class='edit-field' data-key='${key}' value="${val}"><br>`;
-                            }
-                        }
-                    }
+<script src="https://unpkg.com/@antv/g6@4.8.24/dist/g6.min.js"></script>
+<script>
+    const statusEl = document.getElementById("graph-status");
+    const graphContainer = document.getElementById("graph-container");
+    const inputEl = document.getElementById("knowledge-id-input");
+    const loadBtn = document.getElementById("load-graph-btn");
+    let graph = null;
 
-                    metaPanel.classList.add("open");
+    const stats = {
+        total: document.getElementById("stat-total"),
+        conceptual: document.getElementById("stat-conceptual"),
+        procedural: document.getElementById("stat-procedural"),
+        assessment: document.getElementById("stat-assessment"),
+    };
 
-                    // === Save Changes ===
-                    metaPanel.querySelector(".save-btn").onclick = () => {
-                        metaPanel
-                            .querySelectorAll(".edit-field")
-                            .forEach((input) => {
-                                const path = input
-                                    .getAttribute("data-key")
-                                    .split(".");
-                                let ref = d;
-                                for (let i = 0; i < path.length - 1; i++)
-                                    ref = ref[path[i]];
-                                ref[path[path.length - 1]] = input.value;
-                            });
+    function setStatus(type, message) {
+        statusEl.className = `alert alert-${type}`;
+        statusEl.innerHTML = `<span>${message}</span>`;
+    }
 
-                        // ✅ Send to backend
-                        fetch("/update_node", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(d),
-                        })
-                            .then((res) => res.json())
-                            .then((data) => {
-                                if (data.status === "updated") {
-                                    alert("✅ Node updated in Neo4j!");
-                                } else {
-                                    alert(
-                                        "⚠️ Update failed: " +
-                                            JSON.stringify(data),
-                                    );
-                                }
-                            })
-                            .catch((err) =>
-                                alert("❌ Error saving node: " + err),
-                            );
-                    };
+    function getBadgeClass(nodeType) {
+        if (nodeType === "conceptual") return "badge-warning";
+        if (nodeType === "procedural") return "badge-info";
+        if (nodeType === "assessment") return "badge-success";
+        return "badge-neutral";
+    }
 
-                    // === Close panel on click outside ===
-                    document.body.onclick = (e) => {
-                        if (!metaPanel.contains(e.target))
-                            metaPanel.classList.remove("open");
-                    };
-                }
+    function getNodeColor(nodeType) {
+        if (nodeType === "root") return "#E879F9";
+        if (nodeType === "conceptual") return "#60A5FA";
+        if (nodeType === "procedural") return "#34D399";
+        if (nodeType === "assessment") return "#F59E0B";
+        return "#9CA3AF";
+    }
 
-                simulation.on("tick", () => {
-                    link.attr("x1", (d) => d.source.x)
-                        .attr("y1", (d) => d.source.y)
-                        .attr("x2", (d) => d.target.x)
-                        .attr("y2", (d) => d.target.y);
-                    edgeLabel
-                        .attr("x", (d) => (d.source.x + d.target.x) / 2)
-                        .attr("y", (d) => (d.source.y + d.target.y) / 2);
-                    node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-                });
+    function collectChildren(node) {
+        if (node.type === "procedural") {
+            return node.child ? [node.child] : [];
+        }
+        return Array.isArray(node.children) ? node.children : [];
+    }
 
-                function dragstarted(event) {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    event.subject.fx = event.subject.x;
-                    event.subject.fy = event.subject.y;
-                }
-                function dragged(event) {
-                    event.subject.fx = event.x;
-                    event.subject.fy = event.y;
-                }
-                function dragended(event) {
-                    if (!event.active) simulation.alphaTarget(0);
-                    event.subject.fx = null;
-                    event.subject.fy = null;
-                }
+    function flattenNodes(root) {
+        const queue = [root];
+        const result = [];
 
-                const addPopup = document.getElementById("add-popup");
-                const deletePopup = document.getElementById("delete-popup");
+        while (queue.length) {
+            const current = queue.shift();
+            result.push(current);
+            collectChildren(current).forEach((child) => queue.push(child));
+        }
 
-                document.getElementById("add-node").onclick = (e) => {
-                    e.stopPropagation();
-                    deletePopup.classList.remove("open");
-                    addPopup.classList.toggle("open");
-                };
-                document.getElementById("delete-node").onclick = (e) => {
-                    e.stopPropagation();
-                    addPopup.classList.remove("open");
-                    deletePopup.classList.toggle("open");
-                };
+        return result;
+    }
 
-                document.addEventListener("click", (e) => {
-                    if (
-                        !addPopup.contains(e.target) &&
-                        !deletePopup.contains(e.target) &&
-                        !e.target.matches("#add-node") &&
-                        !e.target.matches("#delete-node")
-                    ) {
-                        addPopup.classList.remove("open");
-                        deletePopup.classList.remove("open");
-                    }
-                });
+    function buildGraphData(root) {
+        const nodeMap = new Map();
+        const edges = [];
 
-                document.getElementById("confirm-add").onclick = () => {
-                    const type = document.getElementById("add-type").value;
-                    const from = document
-                        .getElementById("add-from")
-                        .value.trim();
-                    const to = document.getElementById("add-to").value.trim();
-                    if (!from || !to) return alert("Please fill all fields.");
-                    alert(
-                        `(Simulated) Added new ${type} node "${to}" from "${from}".`,
-                    );
-                    addPopup.classList.remove("open");
-                };
-
-                document.getElementById("confirm-delete").onclick = () => {
-                    const type = document.getElementById("delete-type").value;
-                    const name = document
-                        .getElementById("delete-name")
-                        .value.trim();
-                    if (!name) return alert("Please enter a node name.");
-                    alert(`(Simulated) Deleted ${type} node "${name}".`);
-                    deletePopup.classList.remove("open");
-                };
-
-                update();
+        function addNode(node) {
+            if (!node || !node.id || nodeMap.has(node.id)) return;
+            nodeMap.set(node.id, {
+                id: node.id,
+                label: (node.label || node.name || node.id).substring(0, 20),
+                type: node.type || "root",
+                style: {
+                    fill: getNodeColor(node.type || "root"),
+                    stroke: "#1F2937",
+                },
             });
-        </script>
-    </body>
-</html>
+        }
+
+        function addEdge(sourceId, targetId, relation) {
+            if (!sourceId || !targetId) return;
+            edges.push({
+                source: sourceId,
+                target: targetId,
+                label: relation || "HAS_CHILD",
+                style: {
+                    stroke: relation === "HAS_CHILD" ? "#60A5FA" : "#9CA3AF",
+                    endArrow: {
+                        path: G6.Arrow.triangle(8, 10, 0),
+                        fill: relation === "HAS_CHILD" ? "#60A5FA" : "#9CA3AF",
+                    },
+                },
+            });
+        }
+
+        function walk(node) {
+            addNode(node);
+            const children = collectChildren(node);
+            children.forEach((child) => {
+                addNode(child);
+                addEdge(node.id, child.id, "HAS_CHILD");
+                walk(child);
+            });
+
+            if (Array.isArray(node.connections)) {
+                node.connections.forEach((connection) => {
+                    addEdge(node.id, connection.to, connection.relation);
+                });
+            }
+        }
+
+        walk(root);
+        return { nodes: Array.from(nodeMap.values()), edges };
+    }
+
+    function renderG6Graph(data) {
+        if (graph) {
+            graph.destroy();
+        }
+
+        const width = graphContainer.clientWidth;
+        const height = graphContainer.clientHeight;
+
+        graph = new G6.Graph({
+            container: graphContainer,
+            width,
+            height,
+            modes: {
+                default: ["drag-canvas", "zoom-canvas", "drag-node"],
+            },
+            layout: {
+                type: "force",
+                preventOverlap: true,
+                nodeSize: 50,
+                linkDistance: 180,
+                nodeStrength: -400,
+                edgeStrength: 0.7,
+            },
+            defaultNode: {
+                size: 50,
+                labelCfg: {
+                    style: {
+                        fill: "#1F2937",
+                        fontSize: 12,
+                    },
+                },
+            },
+            defaultEdge: {
+                type: "line",
+                labelCfg: {
+                    autoRotate: true,
+                    style: {
+                        fill: "#6B7280",
+                        fontSize: 10,
+                        background: {
+                            fill: "#F3F4F6",
+                            padding: [2, 4, 2, 4],
+                            radius: 2,
+                        },
+                    },
+                },
+            },
+        });
+
+        graph.data(data);
+        graph.render();
+    }
+
+    async function loadGraph() {
+        const knowledgeId = inputEl.value.trim();
+        if (!knowledgeId) {
+            setStatus("warning", "Knowledge ID is required.");
+            return;
+        }
+
+        setStatus("info", "Loading graph data...");
+        if (graph) {
+            graph.clear();
+        }
+
+        try {
+            const response = await fetch(`/graph/data/${encodeURIComponent(knowledgeId)}`);
+            if (!response.ok) {
+                throw new Error(`Request failed (${response.status})`);
+            }
+
+            const graph = await response.json();
+            const nodes = flattenNodes(graph);
+
+            const conceptualCount = nodes.filter((n) => n.type === "conceptual").length;
+            const proceduralCount = nodes.filter((n) => n.type === "procedural").length;
+            const assessmentCount = nodes.filter((n) => n.type === "assessment").length;
+
+            stats.total.textContent = String(nodes.length);
+            stats.conceptual.textContent = String(conceptualCount);
+            stats.procedural.textContent = String(proceduralCount);
+            stats.assessment.textContent = String(assessmentCount);
+
+            renderG6Graph(buildGraphData(graph));
+            setStatus("success", "Graph loaded successfully.");
+
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.set("knowledge_id", knowledgeId);
+            window.history.replaceState({}, "", nextUrl.toString());
+        } catch (error) {
+            stats.total.textContent = "0";
+            stats.conceptual.textContent = "0";
+            stats.procedural.textContent = "0";
+            stats.assessment.textContent = "0";
+            if (graph) {
+                graph.clear();
+            }
+            setStatus("error", `Unable to load graph: ${error.message}`);
+        }
+    }
+
+    loadBtn.addEventListener("click", loadGraph);
+    document.addEventListener("click", (event) => {
+        const button = event.target.closest(".select-knowledge-id");
+        if (!button) return;
+        inputEl.value = button.dataset.knowledgeId || "";
+        loadGraph();
+    });
+
+    inputEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            loadGraph();
+        }
+    });
+
+    if (inputEl.value.trim()) {
+        loadGraph();
+    }
+</script>
+{% endblock %}

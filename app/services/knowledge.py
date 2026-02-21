@@ -7,7 +7,7 @@ import jinja2
 import pydantic_ai
 from neo4j import ManagedTransaction, Session, Transaction, unit_of_work
 
-from app import models, services
+from app import models, schemas, services
 from app.models.knowledge import Knowledge
 from tests import factories
 
@@ -64,11 +64,16 @@ class KnowledgeUploadService:
             upload_id, {"status": models.KnowledgeUploadStatus.PROCESSING}
         )
 
-    def mark_as_completed(self, upload_id: str) -> models.KnowledgeUploadRecord:
+    def mark_as_completed(
+        self, upload_id: str, *, knowledge_id: str | None = None
+    ) -> models.KnowledgeUploadRecord:
         self.__logger.info(f"Marking upload {upload_id} as COMPLETED")
-        return self.__update(
-            upload_id, {"status": models.KnowledgeUploadStatus.COMPLETED}
-        )
+        data: dict[str, object] = {
+            "status": models.KnowledgeUploadStatus.COMPLETED,
+        }
+        if knowledge_id:
+            data["knowledge_id"] = knowledge_id
+        return self.__update(upload_id, data)
 
     def mark_as_failed(
         self, upload_id: str, *, error: str
@@ -115,11 +120,12 @@ class KnowledgeService:
         @unit_of_work()
         def txn_fn(tx: ManagedTransaction, knowledge_id: str) -> models.Knowledge:
             query = (
-                "MATCH (root: {id: $id, type: $root_type}) "
+                "MATCH (root {id: $id, type: $root_type}) "
                 "CALL { "
                 "WITH root "
                 f"MATCH (root)-[:{self.__child_relation_type}*0..]->(n) "
-                "RETURN collect(distinct n) + root AS nodes "
+                "WITH root, collect(distinct n) AS descendants "
+                "RETURN descendants + [root] AS nodes "
                 "} "
                 "CALL { "
                 "WITH nodes "
@@ -251,6 +257,33 @@ class KnowledgeService:
         with self.__session_factory() as session:
             return session.execute_read(txn_fn, knowledge_id=knowledge_id)
 
+    def get_root_nodes(
+        self, limit: int | None = 5, offset: int = 0
+    ) -> list[schemas.KnowledgeRootNode]:
+        if offset < 0:
+            raise ValueError("Offset must be non-negative")
+        if limit is not None and limit < 1:
+            raise ValueError("Limit must be at least 1 when provided")
+
+        with self.__session_factory() as session:
+            result = session.run(
+                "MATCH (n {type: $root_type}) "
+                "RETURN n.id AS id, n.name AS name, n.source AS source "
+                "ORDER BY coalesce(n.updated_at, n.created_at) DESC "
+                "SKIP $offset " + ("LIMIT $limit" if limit is not None else ""),
+                root_type=models.KnowledgeType.ROOT,
+                offset=offset,
+                limit=limit,
+            )
+            return [
+                schemas.KnowledgeRootNode(
+                    id=record["id"],
+                    name=record.get("name"),
+                    source=record.get("source"),
+                )
+                for record in result
+            ]
+
     def __process_pages_batch(
         self,
         upload_id: str,
@@ -315,7 +348,10 @@ class KnowledgeService:
             self.__logger.info(
                 f"Knowledge graph created successfully with ID: {knowledge_id}"
             )
-            self.__upload_service.mark_as_completed(upload_id)
+            self.__upload_service.mark_as_completed(
+                upload_id,
+                knowledge_id=knowledge_id,
+            )
             return knowledge_id
         except Exception as e:
             self.__logger.error(

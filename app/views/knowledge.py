@@ -1,4 +1,3 @@
-
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, render_template, request
 from flask_pydantic import validate
@@ -38,6 +37,45 @@ def upload_list(
         "knowledge/upload_list.html",
         uploads=uploads,
     )
+
+
+@app.route("/graph", methods=["GET"])
+@validate()
+@inject
+def graph(
+    query: schemas.KnowledgeIdsRequest,
+    *,
+    knowledge_controller: controllers.KnowledgeController = Provide[
+        Application.controllers.knowledge_controller
+    ],
+):
+    root_nodes_page = knowledge_controller.get_root_nodes(
+        page=query.page,
+        page_size=query.page_size + 1,
+    )
+    has_next = len(root_nodes_page) > query.page_size
+    root_nodes = root_nodes_page[: query.page_size]
+
+    return render_template(
+        "knowledge/graph.html",
+        root_nodes=root_nodes,
+        page=query.page,
+        page_size=query.page_size,
+        has_next=has_next,
+    )
+
+
+@app.route("/graph/data/<knowledge_id>", methods=["GET"])
+@validate()
+@inject
+def graph_data(
+    knowledge_id: str,
+    *,
+    knowledge_controller: controllers.KnowledgeController = Provide[
+        Application.controllers.knowledge_controller
+    ],
+):
+    return knowledge_controller.get_knowledge(knowledge_id)
 
 
 @app.route("/upload/submit", methods=["POST"])
