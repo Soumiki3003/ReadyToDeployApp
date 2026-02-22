@@ -7,14 +7,14 @@ from pydantic_ai import Agent
 
 from app import models
 
-from .student import StudentService
+from .user import UserService
 
 
 class SupervisorAgentService:
     def __init__(
         self,
         *,
-        student_service: StudentService,
+        user_service: UserService,
         graph_rag: GraphRAG,
         hint_agent: Agent,
         top_k: int = 5,
@@ -34,7 +34,7 @@ class SupervisorAgentService:
             "code",
         ],
     ):
-        self.__student_service = student_service
+        self.__user_service = user_service
         self.__graph_rag = graph_rag
         self.__hint_agent = hint_agent
         self.__top_k = top_k
@@ -92,18 +92,18 @@ class SupervisorAgentService:
                 return interaction_type
         return "context_request"
 
-    def __get_student_trajectory_similar_queries(self, query: str, *, student_id: str):
+    def __get_similar_trajectory_queries(self, query: str, *, user_id: str):
         trajectories: list[str] = []
 
         # TODO: Why not only use the query_similarity as a exact match would be always present in the list?
-        for item in self.__student_service.get_student_trajectory_by_query_exact_match(
-            student_id, query
+        for item in self.__user_service.get_user_trajectory_by_query_exact_match(
+            user_id, query
         ):
             if item.id and item.id not in trajectories:
                 trajectories.append(item.id)
 
-        for item in self.__student_service.get_student_trajectory_by_query_similarity(
-            student_id, query, threshold=self.__similarity_threshold
+        for item in self.__user_service.get_user_trajectory_by_query_similarity(
+            user_id, query, threshold=self.__similarity_threshold
         ):
             if item.id and item.id not in trajectories:
                 trajectories.append(item.id)
@@ -116,7 +116,7 @@ class SupervisorAgentService:
         query_repeat_count: int,
         *,
         retrieved_nodes: list[str],
-        student_id: str,
+        user_id: str,
     ):
         hint_triggered = query_repeat_count >= self.__hint_by_similarity_threshold
         hint_reason = None
@@ -130,10 +130,10 @@ class SupervisorAgentService:
                 f"Context nodes: {retrieved_nodes[:3]}"
             )
             hint_text = self.__hint_agent.run_sync(hint_prompt).output.strip()
-            self.__logger.info(f"💡 Hint triggered: {hint_reason} → {hint_text}")
+            self.__logger.info(f"Hint triggered: {hint_reason} -> {hint_text}")
         else:
-            last_trajectories = self.__student_service.get_student_trajectory(
-                student_id, limit=self.__hint_procedural_history_limit
+            last_trajectories = self.__user_service.get_user_trajectory(
+                user_id, limit=self.__hint_procedural_history_limit
             )
             recent_queries = [item.query.lower() for item in last_trajectories]
             recent_queries.append(query.lower())
@@ -150,19 +150,19 @@ class SupervisorAgentService:
                     f"Do not reveal exact code; instead, suggest understanding the concept that supports this step."
                 )
                 hint_text = self.__hint_agent.run_sync(hint_prompt).output.strip()
-                self.__logger.info(f"Hint triggered: {hint_reason} → {hint_text}")
+                self.__logger.info(f"Hint triggered: {hint_reason} -> {hint_text}")
 
         return hint_triggered, hint_reason, hint_text
 
-    def retrieve_context(self, student_id: str, query: str):
+    def retrieve_context(self, user_id: str, query: str):
         try:
-            self.__logger.info(f"Loading student {student_id} state...")
-            student = self.__student_service.get_student(student_id)
-            if not student:
-                self.__logger.warning(f"Student {student_id} not found!")
+            self.__logger.info(f"Loading user {user_id} state...")
+            user = self.__user_service.get_user(user_id)
+            if not user:
+                self.__logger.warning(f"User {user_id} not found!")
                 return None
-            if not student.id:
-                self.__logger.warning(f"Student {student_id} has no ID!")
+            if not user.id:
+                self.__logger.warning(f"User {user_id} has no ID!")
                 return None
 
             self.__logger.info("Retrieving node metadata...")
@@ -175,8 +175,8 @@ class SupervisorAgentService:
             interaction_type = self.__get_interaction_type(query)
 
             self.__logger.info("Computing node count and repeat count...")
-            similar_trajectory_ids = self.__get_student_trajectory_similar_queries(
-                query, student_id=student.id
+            similar_trajectory_ids = self.__get_similar_trajectory_queries(
+                query, user_id=user.id
             )
             query_repeat_count = len(similar_trajectory_ids)
 
@@ -184,11 +184,11 @@ class SupervisorAgentService:
                 query,
                 query_repeat_count,
                 retrieved_nodes=retrieved_nodes,
-                student_id=student.id,
+                user_id=user.id,
             )
 
-            new_trajectory = models.StudentTrajectory(
-                student_id=student.id,
+            new_trajectory = models.UserTrajectory(
+                user_id=user.id,
                 query=query,
                 retrieved_nodes=retrieved_nodes,
                 scores=scores,
@@ -200,9 +200,9 @@ class SupervisorAgentService:
                 hint_reason=hint_reason,
                 hint_text=hint_text,
             )
-            self.__student_service.add_trajectory_entry(student_id, new_trajectory)
+            self.__user_service.add_trajectory_entry(user_id, new_trajectory)
             self.__logger.info(
-                f"✅ Context retrieval logged. ({interaction_type}, {node_entry_count} nodes, {response_time_sec}s)"
+                f"Context retrieval logged. ({interaction_type}, {node_entry_count} nodes, {response_time_sec}s)"
             )
             return rag_result
 

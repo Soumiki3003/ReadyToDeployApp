@@ -16,11 +16,12 @@ from .knowledge import (
     ProceduralKnowledge,
     RootKnowledge,
 )
-from .student import Student, StudentTrajectory
+from .user import User, UserRole, UserTrajectory
 
 __all__ = [
-    "Student",
-    "StudentTrajectory",
+    "User",
+    "UserRole",
+    "UserTrajectory",
     "KnowledgeDifficulty",
     "KnowledgeType",
     "KnowledgeConceptualBloomLevel",

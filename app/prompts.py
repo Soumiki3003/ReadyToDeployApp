@@ -46,7 +46,7 @@ def _get_example_json(*, indent: int = 2) -> str:
             "id": "root-uuid-12345",
             "type": "root",
             "name": "Central node",
-            "source": "CTF_tutorial.pdf",
+            "sources": ["CTF_tutorial.pdf"],
             "children": [
                 {
                     "id": "concept-uuid-001",

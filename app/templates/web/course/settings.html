@@ -1,0 +1,157 @@
+{% extends "base_app.html" %}
+{% block title %}Settings - {{ course.name }} - KnowledgeGraph{% endblock %}
+
+{% block breadcrumb %}
+<div class="breadcrumbs text-sm">
+    <ul>
+        <li><a href="{{ url_for('course.dashboard') }}">Courses</a></li>
+        <li>{{ course.name }}</li>
+        <li>Settings</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">{{ course.name }}</h1>
+    <a href="{{ url_for('course.chat', course_id=course_id) }}" class="btn btn-sm btn-outline">
+        Back to Chat
+    </a>
+</div>
+
+{% if course.description %}
+<p class="text-base-content/70 mb-6">{{ course.description }}</p>
+{% endif %}
+
+<!-- Tabs -->
+<div class="tabs tabs-boxed mb-6" id="settings-tabs">
+    <a class="tab tab-active" data-tab="graph">Knowledge Graph</a>
+    <a class="tab" data-tab="upload">Upload Materials</a>
+    <a class="tab" data-tab="prompts">Agent Prompts</a>
+    <a class="tab" data-tab="domain">Domain Language</a>
+</div>
+
+<!-- Tab: Knowledge Graph -->
+<div id="tab-graph" class="tab-content">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h3 class="font-semibold text-lg mb-4">Knowledge Graph Viewer</h3>
+            {% if course.sources %}
+            <div class="mb-4">
+                <span class="text-sm text-base-content/70">Sources:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                    {% for src in course.sources %}
+                    <span class="badge badge-outline badge-sm">{{ src }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <a
+                href="{{ url_for('knowledge.graph', knowledge_id=course_id) }}"
+                class="btn btn-primary"
+                target="_blank"
+            >
+                Open Graph View
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Tab: Upload Materials -->
+<div id="tab-upload" class="tab-content hidden">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h3 class="font-semibold text-lg mb-4">Upload Course Materials</h3>
+            <form
+                id="course-upload-form"
+                hx-post="{{ url_for('course.upload_to_course', course_id=course_id) }}"
+                hx-encoding="multipart/form-data"
+                hx-swap="none"
+            >
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Select Files</span>
+                    </label>
+                    <input
+                        type="file"
+                        name="files"
+                        multiple
+                        required
+                        accept="{{ allowed_extensions|join(',') }}"
+                        class="file-input file-input-bordered"
+                    />
+                </div>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="htmx-indicator loading loading-spinner loading-xs"></span>
+                        Upload
+                    </button>
+                </div>
+            </form>
+
+            <!-- Upload list -->
+            <div class="divider"></div>
+            <h4 class="font-medium mb-2">Recent Uploads</h4>
+            <div
+                id="upload-list"
+                hx-get="{{ url_for('knowledge.upload_list') }}"
+                hx-trigger="load, every 5s"
+                hx-swap="innerHTML"
+            >
+                <span class="loading loading-spinner loading-sm"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab: Agent Prompts (WIP) -->
+<div id="tab-prompts" class="tab-content hidden">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>
+                    <h3 class="font-bold">Work in Progress</h3>
+                    <p class="text-sm">Agent prompt customization (Socratic style, system prompts) is coming soon.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab: Domain Language (WIP) -->
+<div id="tab-domain" class="tab-content hidden">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>
+                    <h3 class="font-bold">Work in Progress</h3>
+                    <p class="text-sm">Domain language configuration is coming soon.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab switching
+    document.querySelectorAll('#settings-tabs .tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('#settings-tabs .tab').forEach(t => t.classList.remove('tab-active'));
+            tab.classList.add('tab-active');
+
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById('tab-' + tab.dataset.tab).classList.remove('hidden');
+        });
+    });
+
+    // Upload form success handler
+    document.body.addEventListener("htmx:afterRequest", function (evt) {
+        if (evt.detail.target.id === "course-upload-form" && evt.detail.successful) {
+            evt.detail.target.reset();
+            htmx.trigger("#upload-list", "load");
+        }
+    });
+</script>
+{% endblock %}

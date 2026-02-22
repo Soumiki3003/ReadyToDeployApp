@@ -1,4 +1,4 @@
-from .student import CreateStudent, UpdateStudent
+from .user import CreateUser, UpdateUser
 from .knowledge import (
     KnowledgeUploadRequest,
     KnowledgeUploadResponse,
@@ -13,8 +13,8 @@ from .file import (
 )
 
 __all__ = [
-    "CreateStudent",
-    "UpdateStudent",
+    "CreateUser",
+    "UpdateUser",
     "KnowledgeUploadRequest",
     "KnowledgeUploadResponse",
     "KnowledgeIdsRequest",

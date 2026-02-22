@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block navbar %}
+<div class="navbar bg-base-100 shadow-sm">
+    <div class="navbar-start">
+        <a href="{{ url_for('course.dashboard') }}" class="btn btn-ghost text-xl">KnowledgeGraph</a>
+    </div>
+    <div class="navbar-center hidden md:flex">
+        {% block breadcrumb %}{% endblock %}
+    </div>
+    <div class="navbar-end gap-2">
+        {% block page_actions %}{% endblock %}
+        {% if current_user.is_authenticated %}
+        <span class="text-sm font-medium">{{ current_user.name }}</span>
+        {% if current_user.role == "instructor" %}
+        <span class="badge badge-primary badge-sm">Instructor</span>
+        {% else %}
+        <span class="badge badge-secondary badge-sm">Student</span>
+        {% endif %}
+        <form action="{{ url_for('auth.logout') }}" method="post" class="inline">
+            <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

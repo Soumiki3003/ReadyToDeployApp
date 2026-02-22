@@ -1,18 +1,34 @@
 from datetime import datetime, timezone
+from enum import StrEnum
+from uuid import uuid4
 
+from flask_login import UserMixin
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
-class Student(BaseModel):
-    id: str | None = None
+class UserRole(StrEnum):
+    STUDENT = "student"
+    INSTRUCTOR = "instructor"
+
+
+class User(UserMixin, BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(min_length=2)
     email: EmailStr
     password: str = Field(min_length=8)
+    role: UserRole = Field(default=UserRole.STUDENT)
     enabled: bool = True
 
+    def get_id(self) -> str:
+        return self.id or ""
 
-class StudentTrajectory(BaseModel):
-    id: str | None = None
+    @property
+    def is_active(self) -> bool:
+        return self.enabled
+
+
+class UserTrajectory(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     query: str
     retrieved_nodes: list[str] = Field(default_factory=list)
@@ -25,7 +41,7 @@ class StudentTrajectory(BaseModel):
     hint_reason: str | None = None
     hint_text: str | None = None
 
-    student_id: str
+    user_id: str
 
     @model_validator(mode="after")
     def validate_scores_length(self):

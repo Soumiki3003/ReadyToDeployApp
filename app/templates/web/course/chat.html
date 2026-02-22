@@ -1,0 +1,90 @@
+{% extends "base_app.html" %}
+{% block title %}Chat - {{ course.name }} - KnowledgeGraph{% endblock %}
+
+{% block breadcrumb %}
+<div class="breadcrumbs text-sm">
+    <ul>
+        <li><a href="{{ url_for('course.dashboard') }}">Courses</a></li>
+        <li>{{ course.name }}</li>
+        <li>Chat</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    #chat-messages {
+        height: calc(100vh - 16rem);
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 h-full">
+    <!-- Sidebar -->
+    <div class="w-64 hidden lg:block">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="font-semibold text-sm mb-2">
+                    Topics
+                    <span class="badge badge-warning badge-xs ml-1">WIP</span>
+                </h3>
+                <ul class="menu menu-sm bg-base-200 rounded-box">
+                    <li class="disabled"><a>Progress tracking coming soon</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="flex-1 flex flex-col">
+        <div class="card bg-base-100 shadow-sm flex-1">
+            <div class="card-body p-4 flex flex-col">
+                <!-- Messages -->
+                <div id="chat-messages" class="flex-1 space-y-4 overflow-y-auto px-2">
+                    {% if not messages %}
+                    <div class="flex items-center justify-center h-full text-base-content/50">
+                        <div class="text-center">
+                            <p class="text-lg font-medium mb-2">Start a conversation</p>
+                            <p class="text-sm">Ask questions about {{ course.name }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Input -->
+                <div class="divider my-2"></div>
+                <form
+                    id="chat-form"
+                    hx-post="{{ url_for('course.chat_send', course_id=course_id) }}"
+                    hx-target="#chat-messages"
+                    hx-swap="beforeend"
+                    hx-on::after-request="this.reset(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
+                    class="flex gap-2"
+                >
+                    <div class="tooltip tooltip-right" data-tip="Coming soon">
+                        <button type="button" class="btn btn-ghost btn-sm" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                        </button>
+                    </div>
+                    <input
+                        type="text"
+                        name="message"
+                        placeholder="Type your message..."
+                        class="input input-bordered flex-1"
+                        required
+                        autocomplete="off"
+                    />
+                    <button type="submit" class="btn btn-primary">
+                        <span class="htmx-indicator loading loading-spinner loading-xs"></span>
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

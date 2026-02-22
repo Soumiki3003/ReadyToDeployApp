@@ -48,7 +48,7 @@
                         <tr>
                             <td class="font-medium">{{ root.name or 'Central node' }}</td>
                             <td><code class="text-xs">{{ root.id }}</code></td>
-                            <td class="text-sm">{{ root.source or '-' }}</td>
+                            <td class="text-sm">{{ root.sources|join(', ') if root.sources else '-' }}</td>
                             <td>
                                 <button
                                     type="button"
@@ -333,7 +333,7 @@
         }
 
         try {
-            const response = await fetch(`/graph/data/${encodeURIComponent(knowledgeId)}`);
+            const response = await fetch(`/knowledge/graph/data/${encodeURIComponent(knowledgeId)}`);
             if (!response.ok) {
                 throw new Error(`Request failed (${response.status})`);
             }

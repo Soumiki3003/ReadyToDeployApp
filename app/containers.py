@@ -144,6 +144,7 @@ class Services(containers.DeclarativeContainer):
     gateways = providers.DependenciesContainer()
 
     file = providers.Factory(services.FileService)
+    auth = providers.Singleton(services.AuthService)
     knowledge_upload = providers.Singleton(services.KnowledgeUploadService)
     knowledge = providers.Factory(
         services.KnowledgeService,
@@ -154,6 +155,15 @@ class Services(containers.DeclarativeContainer):
         upload_service=knowledge_upload,
         static_folder=core.static_folder,
         fake_generation=config.knowledge.fake_generation.as_(bool),
+    )
+    user = providers.Factory(
+        services.UserService,
+        session_factory=gateways.neo4j_session.provider,
+        embedder=ai.default_embedder,
+        rag=gateways.trajectory_graphrag,
+        auth_service=auth,
+        trajectory_vector_index_field="trajectory_vector",
+        trajectory_full_text_index_field="trajectory_text",
     )
 
 
@@ -166,6 +176,17 @@ class Controllers(containers.DeclarativeContainer):
         controllers.KnowledgeController,
         uploads_folder=core.uploads_folder,
         knowledge_service=services.knowledge,
+        uploads_service=services.knowledge_upload,
+    )
+    auth_controller = providers.Factory(
+        controllers.AuthController,
+        user_service=services.user,
+        auth_service=services.auth,
+    )
+    course_controller = providers.Factory(
+        controllers.CourseController,
+        knowledge_service=services.knowledge,
+        uploads_folder=core.uploads_folder,
         uploads_service=services.knowledge_upload,
     )
 

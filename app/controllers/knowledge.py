@@ -90,14 +90,14 @@ class KnowledgeController:
             try:
                 knowledge_graph = self.__parse_uploaded_file(f)
                 if knowledge_graph:
-                    if source := getattr(knowledge_graph, "source", None):
-                        uploaded_paths.append(source)
+                    if sources := getattr(knowledge_graph, "sources", None):
+                        uploaded_paths.extend(sources)
                         self.__logger.info(
-                            f"Successfully processed file {idx}/{len(form.files)}: {source}"
+                            f"Successfully processed file {idx}/{len(form.files)}: {sources}"
                         )
                     else:
                         self.__logger.warning(
-                            f"Knowledge graph for file {f.filename} has no source attribute"
+                            f"Knowledge graph for file {f.filename} has no sources attribute"
                         )
                 else:
                     self.__logger.warning(

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from contextlib import AbstractContextManager
 from typing import Callable
 
 import jinja2
@@ -97,7 +98,7 @@ class KnowledgeService:
     def __init__(
         self,
         *,
-        session_factory: Callable[[], Session],
+        session_factory: Callable[..., AbstractContextManager[Session]],
         agent: pydantic_ai.Agent,
         file_service: services.FileService,
         upload_service: KnowledgeUploadService,
@@ -268,21 +269,22 @@ class KnowledgeService:
         with self.__session_factory() as session:
             result = session.run(
                 "MATCH (n {type: $root_type}) "
-                "RETURN n.id AS id, n.name AS name, n.source AS source "
+                "RETURN n.id AS id, n.name AS name, n.description AS description, n.sources AS sources "
                 "ORDER BY coalesce(n.updated_at, n.created_at) DESC "
                 "SKIP $offset " + ("LIMIT $limit" if limit is not None else ""),
                 root_type=models.KnowledgeType.ROOT,
                 offset=offset,
                 limit=limit,
+            ).data()
+        return [
+            schemas.KnowledgeRootNode(
+                id=record["id"],
+                name=record.get("name"),
+                description=record.get("description"),
+                sources=record.get("sources") or [],
             )
-            return [
-                schemas.KnowledgeRootNode(
-                    id=record["id"],
-                    name=record.get("name"),
-                    source=record.get("source"),
-                )
-                for record in result
-            ]
+            for record in result
+        ]
 
     def __process_pages_batch(
         self,
@@ -297,7 +299,7 @@ class KnowledgeService:
         visual = self.__file_service.extract_visual_content(file_path)
         self.__logger.debug(f"Extracted {len(visual)} visual content entries")
 
-        root_knowledge = models.RootKnowledge(source=upload_id)
+        root_knowledge = models.RootKnowledge(sources=[upload_id])
         self.__upload_service.mark_as_processing(upload_id)
         self.__logger.info("Running AI agent to generate knowledge graph...")
 
@@ -356,6 +358,73 @@ class KnowledgeService:
         except Exception as e:
             self.__logger.error(
                 f"Error creating knowledge from file {file_path.name}: {e}",
+                exc_info=True,
+            )
+            self.__upload_service.mark_as_failed(upload_id, error=str(e))
+            raise
+
+    def create_empty_course(self, name: str, description: str = "") -> str:
+        self.__logger.info(f"Creating empty course: {name}")
+        root_knowledge = models.RootKnowledge(
+            name=name,
+            description=description,
+            sources=[],
+        )
+        knowledge_id = self.create_knowledge(root_knowledge)
+        self.__logger.info(f"Empty course created with ID: {knowledge_id}")
+        return knowledge_id
+
+    def add_document_to_course(self, course_id: str, file_path: Path) -> str:
+        self.__logger.info(f"Adding document {file_path.name} to course {course_id}")
+        upload_id = self.__upload_service.create(file_path)
+
+        if self.__fake_generation:
+            self.__logger.warning(
+                "Fake generation enabled - using factory to create knowledge graph"
+            )
+            new_root = factories.RootKnowledgeFactory.build()
+        else:
+            new_root = self.__process_pages_batch(upload_id, file_path)
+
+        try:
+            relative_path = file_path.relative_to(self.__static_folder).as_posix()
+
+            def merge_txn(tx):
+                # Verify root exists
+                check = tx.run(
+                    "MATCH (n {id: $id, type: $root_type}) RETURN n.id AS id",
+                    id=course_id,
+                    root_type=models.KnowledgeType.ROOT.value,
+                )
+                if not check.single():
+                    raise ValueError(f"Course with ID {course_id} not found")
+
+                # Add new conceptual children to existing root
+                for child in new_root.children:
+                    child.source = relative_path
+                    self.__create_knowledge_graph(child, parent_id=course_id, tx=tx)
+                # Append source to root's sources list
+                tx.run(
+                    "MATCH (n {id: $id, type: $root_type}) "
+                    "SET n.sources = CASE "
+                    "  WHEN n.sources IS NULL THEN [$source] "
+                    "  WHEN NOT $source IN n.sources THEN n.sources + $source "
+                    "  ELSE n.sources "
+                    "END",
+                    id=course_id,
+                    root_type=models.KnowledgeType.ROOT.value,
+                    source=relative_path,
+                )
+
+            with self.__session_factory() as session:
+                session.execute_write(merge_txn)
+
+            self.__upload_service.mark_as_completed(upload_id, knowledge_id=course_id)
+            self.__logger.info(f"Document {file_path.name} added to course {course_id}")
+            return course_id
+        except Exception as e:
+            self.__logger.error(
+                f"Error adding document to course {course_id}: {e}",
                 exc_info=True,
             )
             self.__upload_service.mark_as_failed(upload_id, error=str(e))
@@ -463,17 +532,6 @@ class KnowledgeService:
                 exc_info=True,
             )
             raise
-
-        # for conn in item.connections:
-        #     conn_query = (
-        #         "MATCH (a {id:$from_id}), (b {id:$to_id}) "
-        #         f"MERGE (a)-[:{conn.relation.value}]->(b) "
-        #     )
-        #     tx.run(
-        #         conn_query,
-        #         from_id=item.id,
-        #         to_id=conn.to,
-        #     )
 
         return models.ConceptualKnowledge(**record["n"])
 

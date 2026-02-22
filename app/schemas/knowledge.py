@@ -25,11 +25,15 @@ class KnowledgeRootNode(BaseModel):
     id: str = Field(description="Knowledge graph root node ID")
     name: str | None = Field(
         default=None,
-        description="Root node display name",
+        description="Root node display name (course title)",
     )
-    source: str | None = Field(
+    description: str | None = Field(
         default=None,
-        description="Source metadata associated with the root node",
+        description="Course description",
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="List of source files for this knowledge graph",
     )
 
 

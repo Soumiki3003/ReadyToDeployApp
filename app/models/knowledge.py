@@ -275,10 +275,18 @@ class RootKnowledge(BaseModel):
     type_: Literal[KnowledgeType.ROOT] = Field(
         default=KnowledgeType.ROOT, alias="type", examples=[KnowledgeType.ROOT]
     )
-    name: Literal["Central node"] = Field(default="Central node")
-    source: str = Field(
-        description="Source of the knowledge, such as a textbook, lecture, or external resource. This can be used for traceability and providing additional context to students.",
-        examples=["CTF_copy.pdf [page 5]"],
+    name: str = Field(
+        default="Central node",
+        description="Display name for the knowledge graph root node (course title).",
+    )
+    description: str = Field(
+        default="",
+        description="Description of the course or knowledge domain covered by this graph.",
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="List of source files that contributed to this knowledge graph.",
+        examples=[["CTF_copy.pdf", "lecture_notes.pptx"]],
     )
     children: list[ConceptualKnowledge] = Field(
         default_factory=list,
@@ -286,7 +294,8 @@ class RootKnowledge(BaseModel):
     )
 
     def override_conceptual_sources(self, source: str):
-        self.source = source
+        if source not in self.sources:
+            self.sources.append(source)
         for child in self.children:
             child.source = source
 
