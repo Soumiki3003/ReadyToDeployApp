@@ -118,6 +118,44 @@ def settings(
     )
 
 
+@app.route("/course/<course_id>/delete", methods=["DELETE"])
+@roles_required("instructor")
+@inject
+def delete_course(
+    course_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    try:
+        course_controller.delete_course(course_id)
+        return {"success": True, "redirect": "/"}, 200
+    except ValueError as e:
+        return {"error": str(e)}, 404
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/course/<course_id>/clear", methods=["DELETE"])
+@roles_required("instructor")
+@inject
+def clear_course(
+    course_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    try:
+        course_controller.clear_course(course_id)
+        return {"success": True}, 200
+    except ValueError as e:
+        return {"error": str(e)}, 404
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 @app.route("/course/<course_id>/upload", methods=["POST"])
 @roles_required("instructor")
 @inject

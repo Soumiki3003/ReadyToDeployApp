@@ -33,25 +33,73 @@
 
 <!-- Tab: Knowledge Graph -->
 <div id="tab-graph" class="settings-panel flex flex-col" style="height: calc(100vh - 14rem)">
-    <!-- Stats -->
-    <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-100 w-full mb-4 shrink-0">
-        <div class="stat py-3 px-4">
-            <div class="stat-title text-xs">Total</div>
-            <div id="stat-total" class="stat-value text-lg text-primary">0</div>
+    <!-- Stats + Actions bar -->
+    <div class="flex items-center gap-4 mb-4 shrink-0">
+        <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-100 flex-1">
+            <div class="stat py-3 px-4">
+                <div class="stat-title text-xs">Total</div>
+                <div id="stat-total" class="stat-value text-lg text-primary">0</div>
+            </div>
+            <div class="stat py-3 px-4">
+                <div class="stat-title text-xs">Conceptual</div>
+                <div id="stat-conceptual" class="stat-value text-lg" style="color:#60A5FA">0</div>
+            </div>
+            <div class="stat py-3 px-4">
+                <div class="stat-title text-xs">Procedural</div>
+                <div id="stat-procedural" class="stat-value text-lg" style="color:#34D399">0</div>
+            </div>
+            <div class="stat py-3 px-4">
+                <div class="stat-title text-xs">Assessment</div>
+                <div id="stat-assessment" class="stat-value text-lg" style="color:#F59E0B">0</div>
+            </div>
         </div>
-        <div class="stat py-3 px-4">
-            <div class="stat-title text-xs">Conceptual</div>
-            <div id="stat-conceptual" class="stat-value text-lg" style="color:#60A5FA">0</div>
-        </div>
-        <div class="stat py-3 px-4">
-            <div class="stat-title text-xs">Procedural</div>
-            <div id="stat-procedural" class="stat-value text-lg" style="color:#34D399">0</div>
-        </div>
-        <div class="stat py-3 px-4">
-            <div class="stat-title text-xs">Assessment</div>
-            <div id="stat-assessment" class="stat-value text-lg" style="color:#F59E0B">0</div>
+        <div class="flex flex-col gap-2">
+            <button id="btn-refresh-graph" class="btn btn-sm btn-outline btn-primary" onclick="loadCourseGraph()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Refresh
+            </button>
+            <button id="btn-clear-graph" class="btn btn-sm btn-outline btn-error" onclick="confirmClearCourse()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                Clear Graph
+            </button>
+            <button id="btn-delete-course" class="btn btn-sm btn-error" onclick="confirmDeleteCourse()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Delete Course
+            </button>
         </div>
     </div>
+
+    <!-- Clear confirmation modal -->
+    <dialog id="clear-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Clear Knowledge Graph</h3>
+            <p class="py-4">Are you sure you want to delete all nodes from this course's knowledge graph? This action cannot be undone.</p>
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn btn-sm">Cancel</button>
+                </form>
+                <button class="btn btn-sm btn-error" onclick="clearCourse()">Delete All Nodes</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Delete course confirmation modal -->
+    <dialog id="delete-modal" class="modal">
+        <div class="modal-box border border-error">
+            <h3 class="font-bold text-lg text-error">Delete Course</h3>
+            <p class="py-4">This will <strong>permanently delete</strong> the entire course, including the root node and all knowledge graph data. This action <strong>cannot be undone</strong>.</p>
+            <p class="text-sm text-base-content/60">Type the course name to confirm:</p>
+            <input id="delete-confirm-input" type="text" class="input input-bordered input-error w-full mt-2" placeholder="{{ course.name }}">
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn btn-sm">Cancel</button>
+                </form>
+                <button id="delete-confirm-btn" class="btn btn-sm btn-error" disabled onclick="deleteCourse()">Delete Forever</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
 
     <!-- Graph + Detail split -->
     <div class="flex gap-4 flex-1 min-h-0">
@@ -249,13 +297,55 @@
     });
 
     /* ── Toast helper ── */
-    function showToast(msg) {
+    function showToast(msg, type = 'info') {
         const t = document.createElement('div');
-        t.className = 'alert alert-info text-sm shadow-lg';
+        t.className = 'alert alert-' + type + ' text-sm shadow-lg';
         t.innerHTML = '<span>' + msg + '</span>';
         const container = document.getElementById('toast-container');
         container.appendChild(t);
         setTimeout(() => t.remove(), 3000);
+    }
+
+    /* ── Clear course ── */
+    function confirmClearCourse() {
+        document.getElementById('clear-modal').showModal();
+    }
+
+    async function clearCourse() {
+        document.getElementById('clear-modal').close();
+        try {
+            const resp = await fetch('/course/' + encodeURIComponent(courseId) + '/clear', { method: 'DELETE' });
+            if (!resp.ok) throw new Error('Failed to clear course');
+            showToast('Knowledge graph cleared successfully.', 'success');
+            loadCourseGraph();
+        } catch (err) {
+            showToast('Error clearing graph: ' + err.message, 'error');
+        }
+    }
+
+    /* ── Delete course ── */
+    const courseName = {{ course.name | tojson }};
+
+    function confirmDeleteCourse() {
+        const input = document.getElementById('delete-confirm-input');
+        const btn = document.getElementById('delete-confirm-btn');
+        input.value = '';
+        btn.disabled = true;
+        document.getElementById('delete-modal').showModal();
+        input.addEventListener('input', function handler() {
+            btn.disabled = input.value !== courseName;
+        });
+    }
+
+    async function deleteCourse() {
+        document.getElementById('delete-modal').close();
+        try {
+            const resp = await fetch('/course/' + encodeURIComponent(courseId) + '/delete', { method: 'DELETE' });
+            if (!resp.ok) throw new Error('Failed to delete course');
+            window.location.href = '/';
+        } catch (err) {
+            showToast('Error deleting course: ' + err.message, 'error');
+        }
     }
 
     /* ── Graph ── */
@@ -297,17 +387,46 @@
         return result;
     }
 
+    function wrapLabel(text, maxCharsPerLine) {
+        const words = text.split(/\s+/);
+        const lines = [];
+        let current = '';
+        for (const word of words) {
+            if (current && (current + ' ' + word).length > maxCharsPerLine) {
+                lines.push(current);
+                current = word;
+            } else {
+                current = current ? current + ' ' + word : word;
+            }
+        }
+        if (current) lines.push(current);
+        return lines.join('\n');
+    }
+
     function buildGraphData(root) {
         const nodeMap = new Map(), edges = [];
         function addNode(n) {
             if (!n || !n.id || nodeMap.has(n.id)) return;
             const t = normalizeType(n.type);
             allNodesRaw[n.id] = n;
+            const rawLabel = n.label || n.name || n.id;
+            const label = wrapLabel(rawLabel.substring(0, 40), 14);
+            const lineCount = label.split('\n').length;
+            const longestLine = Math.max(...label.split('\n').map(l => l.length));
+            const nodeWidth = Math.max(60, longestLine * 8 + 24);
+            const nodeHeight = Math.max(40, lineCount * 16 + 16);
             nodeMap.set(n.id, {
                 id: n.id,
-                label: (n.label || n.name || n.id).substring(0, 24),
+                label: label,
                 nodeType: t,
-                style: { fill: getNodeColor(t), stroke: '#1F2937', lineWidth: 2 },
+                type: 'rect',
+                size: [nodeWidth, nodeHeight],
+                style: {
+                    fill: getNodeColor(t),
+                    stroke: '#1F2937',
+                    lineWidth: 2,
+                    radius: 8,
+                },
             });
         }
         function addEdge(s, t, rel) {
@@ -333,11 +452,14 @@
         g6Graph = new G6.Graph({
             container: graphContainer, width: w, height: h,
             modes: { default: ['drag-canvas', 'zoom-canvas', 'click-select'] },
-            layout: { type: 'dagre', rankdir: 'LR', nodesep: 50, ranksep: 100 },
+            layout: { type: 'dagre', rankdir: 'LR', nodesep: 40, ranksep: 80 },
             defaultNode: {
-                size: 40,
-                style: { stroke: '#1F2937', lineWidth: 2 },
-                labelCfg: { style: { fill: '#1F2937', fontSize: 11 } },
+                type: 'rect',
+                size: [80, 40],
+                style: { stroke: '#1F2937', lineWidth: 2, radius: 8 },
+                labelCfg: {
+                    style: { fill: '#fff', fontSize: 11, fontWeight: 500, textAlign: 'center' },
+                },
             },
             defaultEdge: {
                 type: 'polyline',
@@ -348,7 +470,8 @@
         });
 
         g6Graph.node(node => ({
-            style: { fill: getNodeColor(node.nodeType), stroke: '#1F2937', lineWidth: 2 },
+            style: { fill: getNodeColor(node.nodeType), stroke: '#1F2937', lineWidth: 2, radius: 8 },
+            labelCfg: { style: { fill: '#fff', fontSize: 11, fontWeight: 500 } },
         }));
 
         g6Graph.on('node:click', evt => {

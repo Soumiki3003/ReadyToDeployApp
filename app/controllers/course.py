@@ -57,3 +57,11 @@ class CourseController:
     def get_course(self, course_id: str):
         self.__logger.debug(f"Fetching course: {course_id}")
         return self.__knowledge_service.get_knowledge(course_id)
+
+    def clear_course(self, course_id: str) -> None:
+        self.__logger.info(f"Clearing course: {course_id}")
+        self.__knowledge_service.clear_course(course_id)
+
+    def delete_course(self, course_id: str) -> None:
+        self.__logger.info(f"Deleting course: {course_id}")
+        self.__knowledge_service.delete_course(course_id)

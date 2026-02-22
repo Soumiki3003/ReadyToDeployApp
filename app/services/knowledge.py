@@ -657,6 +657,73 @@ class KnowledgeService:
 
         return ids
 
+    def delete_course(self, course_id: str) -> None:
+        """Delete a root node and all its descendants entirely."""
+        self.__logger.info(f"Deleting course {course_id} and all descendants")
+
+        def txn_fn(tx):
+            check = tx.run(
+                "MATCH (n {id: $id, type: $root_type}) RETURN n.id AS id",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+            if not check.single():
+                raise ValueError(f"Course with ID {course_id} not found")
+
+            # Delete all descendants first
+            tx.run(
+                f"MATCH (root {{id: $id, type: $root_type}})-[:{self.__child_relation_type}*1..]->(descendant) "
+                "DETACH DELETE descendant",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+
+            # Delete the root node itself
+            tx.run(
+                "MATCH (n {id: $id, type: $root_type}) DETACH DELETE n",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+
+        with self.__session_factory() as session:
+            session.execute_write(txn_fn)
+
+        self.__logger.info(f"Course {course_id} deleted successfully")
+
+    def clear_course(self, course_id: str) -> None:
+        """Delete all children of a root node, keeping the root itself."""
+        self.__logger.info(f"Clearing all children from course {course_id}")
+
+        def txn_fn(tx):
+            # Verify root exists
+            check = tx.run(
+                "MATCH (n {id: $id, type: $root_type}) RETURN n.id AS id",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+            if not check.single():
+                raise ValueError(f"Course with ID {course_id} not found")
+
+            # Delete all descendant nodes and their relationships
+            tx.run(
+                f"MATCH (root {{id: $id, type: $root_type}})-[:{self.__child_relation_type}*1..]->(descendant) "
+                "DETACH DELETE descendant",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+
+            # Clear sources list on the root node
+            tx.run(
+                "MATCH (n {id: $id, type: $root_type}) SET n.sources = []",
+                id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+
+        with self.__session_factory() as session:
+            session.execute_write(txn_fn)
+
+        self.__logger.info(f"Course {course_id} cleared successfully")
+
     def create_knowledge(self, root: models.RootKnowledge) -> str:
         with self.__session_factory() as session:
             tx = session.begin_transaction()
