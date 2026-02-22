@@ -21,17 +21,18 @@ def upload(
 
 
 @app.route("/upload/list", methods=["GET"])
+@validate()
 @inject
 def upload_list(
+    query: schemas.Paginated,
     *,
     knowledge_controller: controllers.KnowledgeController = Provide[
         Application.controllers.knowledge_controller
     ],
 ):
-    page = request.args.get("page", 1, type=int)
-    page_size = request.args.get("page_size", 10, type=int)
-
-    uploads = knowledge_controller.get_uploads(page=page, page_size=page_size)
+    uploads = knowledge_controller.get_uploads(
+        page=query.page, page_size=query.page_size
+    )
 
     return render_template(
         "knowledge/upload_list.html",
@@ -43,7 +44,7 @@ def upload_list(
 @validate()
 @inject
 def graph(
-    query: schemas.KnowledgeIdsRequest,
+    query: schemas.Paginated,
     *,
     knowledge_controller: controllers.KnowledgeController = Provide[
         Application.controllers.knowledge_controller
@@ -66,7 +67,7 @@ def graph(
 
 
 @app.route("/graph/data/<knowledge_id>", methods=["GET"])
-@validate()
+@validate(response_by_alias=True)
 @inject
 def graph_data(
     knowledge_id: str,
@@ -75,7 +76,8 @@ def graph_data(
         Application.controllers.knowledge_controller
     ],
 ):
-    return knowledge_controller.get_knowledge(knowledge_id)
+    knowledge = knowledge_controller.get_knowledge(knowledge_id)
+    return knowledge
 
 
 @app.route("/upload/submit", methods=["POST"])
@@ -87,9 +89,12 @@ def upload_submit(
         Application.controllers.knowledge_controller
     ],
 ):
-    form = schemas.KnowledgeUploadRequest(
-        files=request.files.getlist("files"),
-        html_link=request.form.get("html_link"),
-    )
+    files = request.files.getlist("files")
+    html_link = request.form.get("html_link")
+
+    if not files:
+        return {"error": "At least one file is required"}, 400
+
+    form = schemas.KnowledgeUploadRequest(files=files, html_link=html_link)
     response = knowledge_controller.parse_uploaded_file_list(form)
     return response

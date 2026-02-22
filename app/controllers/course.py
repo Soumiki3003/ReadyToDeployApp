@@ -19,23 +19,25 @@ class CourseController:
         self.__uploads_service = uploads_service
 
     def get_courses(
-        self, page: int = 1, page_size: int = 12
+        self, params: schemas.Paginated
     ) -> tuple[list[schemas.KnowledgeRootNode], bool]:
-        self.__logger.debug(f"Fetching courses (page={page}, page_size={page_size})")
-        if page <= 0 or page_size <= 0:
-            raise ValueError("Page and page_size must be positive integers")
+        self.__logger.debug(
+            f"Fetching courses (page={params.page}, page_size={params.page_size})"
+        )
 
         root_nodes = self.__knowledge_service.get_root_nodes(
-            limit=page_size + 1,
-            offset=(page - 1) * page_size,
+            limit=params.page_size + 1,
+            offset=(params.page - 1) * params.page_size,
         )
-        has_next = len(root_nodes) > page_size
-        courses = root_nodes[:page_size]
+        has_next = len(root_nodes) > params.page_size
+        courses = root_nodes[: params.page_size]
         return courses, has_next
 
-    def create_course(self, name: str, description: str = "") -> str:
-        self.__logger.info(f"Creating course: {name}")
-        return self.__knowledge_service.create_empty_course(name, description)
+    def create_course(self, params: schemas.CreateCourse) -> str:
+        self.__logger.info(f"Creating course: {params.name}")
+        return self.__knowledge_service.create_empty_course(
+            params.name, params.description
+        )
 
     def upload_to_course(self, course_id: str, files: list[FileStorage]) -> None:
         self.__logger.info(f"Uploading {len(files)} file(s) to course {course_id}")

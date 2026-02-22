@@ -16,11 +16,6 @@ class KnowledgeUploadRequest(BaseModel):
     )
 
 
-class KnowledgeIdsRequest(BaseModel):
-    page: int = Field(1, ge=1, description="Page number for pagination")
-    page_size: int = Field(5, ge=1, le=50, description="Number of items per page")
-
-
 class KnowledgeRootNode(BaseModel):
     id: str = Field(description="Knowledge graph root node ID")
     name: str | None = Field(

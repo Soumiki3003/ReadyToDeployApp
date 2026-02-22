@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import hashlib
 
 
@@ -12,3 +13,7 @@ def hash_string(
     if incensitive:
         input_string = input_string.lower()
     return hashlib.blake2b(input_string.encode(), usedforsecurity=False).hexdigest()
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)

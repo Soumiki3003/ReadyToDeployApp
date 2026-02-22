@@ -13,29 +13,21 @@ class AuthController:
         self.__user_service = user_service
         self.__auth_service = auth_service
 
-    def login(self, email: str, password: str) -> models.User | None:
-        self.__logger.info(f"Login attempt for: {email}")
-        user = self.__user_service.authenticate(email, password)
+    def login(self, params: schemas.LoginRequest) -> models.User | None:
+        self.__logger.info(f"Login attempt for: {params.email}")
+        user = self.__user_service.authenticate(
+            params.email, params.password.get_secret_value()
+        )
         if user:
-            self.__logger.info(f"Login successful for: {email} (role={user.role})")
+            self.__logger.info(
+                f"Login successful for: {params.email} (role={user.role})"
+            )
         else:
-            self.__logger.warning(f"Login failed for: {email}")
+            self.__logger.warning(f"Login failed for: {params.email}")
         return user
 
-    def register(
-        self,
-        name: str,
-        email: str,
-        password: str,
-        role: str,
-    ) -> models.User:
-        self.__logger.info(f"Registration attempt: {email} as {role}")
-        create_schema = schemas.CreateUser(
-            name=name,
-            email=email,
-            password=password,
-            role=role,
-        )
-        user = self.__user_service.create_user(create_schema)
-        self.__logger.info(f"Registration successful: {email}")
+    def register(self, params: schemas.CreateUser) -> models.User:
+        self.__logger.info(f"Registration attempt: {params.email} as {params.role}")
+        user = self.__user_service.create_user(params)
+        self.__logger.info(f"Registration successful: {params.email}")
         return user

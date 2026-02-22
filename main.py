@@ -1,8 +1,7 @@
-# === app.py ===
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import current_app, Flask
 from flask_login import LoginManager
 
 from app.containers import Application
@@ -15,11 +14,17 @@ login_manager.login_view = "auth.login_page"
 
 @login_manager.user_loader
 def load_user(user_id: str):
+    if not user_id:
+        return None
     try:
-        container = Application()
+        container = current_app.container
         user_service = container.services.user()
-        return user_service.get_user(user_id)
-    except Exception:
+        user = user_service.get_user(user_id)
+        return user
+    except Exception as e:
+        # Log the error but don't crash the app
+        import logging
+        logging.getLogger(__name__).error(f"Error loading user {user_id}: {e}")
         return None
 
 

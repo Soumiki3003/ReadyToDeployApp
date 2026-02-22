@@ -1,8 +1,9 @@
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, render_template, request
 from flask_login import current_user, login_required
+from flask_pydantic import validate
 
-from app import controllers
+from app import controllers, schemas
 from app.containers import Application
 from app.views.guards import roles_required
 
@@ -11,24 +12,23 @@ app = Blueprint("course", __name__)
 
 @app.route("/", methods=["GET"])
 @login_required
+@validate()
 @inject
 def dashboard(
+    form: schemas.Paginated,
     *,
     course_controller: controllers.CourseController = Provide[
         Application.controllers.course_controller
     ],
     allowed_extensions: list[str] = Provide[Application.core.allowed_extensions],
 ):
-    page = request.args.get("page", 1, type=int)
-    page_size = request.args.get("page_size", 12, type=int)
-
-    courses, has_next = course_controller.get_courses(page=page, page_size=page_size)
+    courses, has_next = course_controller.get_courses(form)
 
     return render_template(
         "course/dashboard.html",
         courses=courses,
-        page=page,
-        page_size=page_size,
+        page=form.page,
+        page_size=form.page_size,
         has_next=has_next,
         allowed_extensions=allowed_extensions,
     )
@@ -36,20 +36,16 @@ def dashboard(
 
 @app.route("/course/create", methods=["POST"])
 @roles_required("instructor")
+@validate()
 @inject
 def create_course(
+    form: schemas.CreateCourse,
     *,
     course_controller: controllers.CourseController = Provide[
         Application.controllers.course_controller
     ],
 ):
-    name = request.form.get("name", "").strip()
-    description = request.form.get("description", "").strip()
-
-    if not name:
-        return {"error": "Course name is required"}, 400
-
-    course_id = course_controller.create_course(name, description)
+    course_id = course_controller.create_course(form.name, form.description)
     return {"id": course_id, "redirect": "/"}, 201
 
 
@@ -74,18 +70,16 @@ def chat(
 
 @app.route("/course/<course_id>/chat/send", methods=["POST"])
 @login_required
+@validate()
 @inject
 def chat_send(
     course_id: str,
+    form: schemas.ChatUserMessageFormRequest,
     *,
     course_controller: controllers.CourseController = Provide[
         Application.controllers.course_controller
     ],
 ):
-    message = request.form.get("message", "").strip()
-    if not message:
-        return "", 400
-
     # Return user message bubble + assistant response
     # For now, assistant response is a placeholder since SupervisorAgentService
     # requires full infrastructure (Neo4j indexes, Ollama, embeddings)
@@ -96,7 +90,7 @@ def chat_send(
 
     return render_template(
         "course/chat_message.html",
-        user_message=message,
+        user_message=form.content,
         assistant_message=response_text,
         user_name=current_user.name,
     )

@@ -32,45 +32,92 @@
 </div>
 
 <!-- Tab: Knowledge Graph -->
-<div id="tab-graph" class="tab-content">
-    <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <h3 class="font-semibold text-lg mb-4">Knowledge Graph Viewer</h3>
-            {% if course.sources %}
-            <div class="mb-4">
-                <span class="text-sm text-base-content/70">Sources:</span>
-                <div class="flex flex-wrap gap-1 mt-1">
-                    {% for src in course.sources %}
-                    <span class="badge badge-outline badge-sm">{{ src }}</span>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            <a
-                href="{{ url_for('knowledge.graph', knowledge_id=course_id) }}"
-                class="btn btn-primary"
-                target="_blank"
-            >
-                Open Graph View
-            </a>
+<div id="tab-graph" class="settings-panel flex flex-col" style="height: calc(100vh - 14rem)">
+    <!-- Stats -->
+    <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-100 w-full mb-4 shrink-0">
+        <div class="stat py-3 px-4">
+            <div class="stat-title text-xs">Total</div>
+            <div id="stat-total" class="stat-value text-lg text-primary">0</div>
+        </div>
+        <div class="stat py-3 px-4">
+            <div class="stat-title text-xs">Conceptual</div>
+            <div id="stat-conceptual" class="stat-value text-lg" style="color:#60A5FA">0</div>
+        </div>
+        <div class="stat py-3 px-4">
+            <div class="stat-title text-xs">Procedural</div>
+            <div id="stat-procedural" class="stat-value text-lg" style="color:#34D399">0</div>
+        </div>
+        <div class="stat py-3 px-4">
+            <div class="stat-title text-xs">Assessment</div>
+            <div id="stat-assessment" class="stat-value text-lg" style="color:#F59E0B">0</div>
         </div>
     </div>
+
+    <!-- Graph + Detail split -->
+    <div class="flex gap-4 flex-1 min-h-0">
+        <!-- Graph container -->
+        <div class="flex-1 card bg-base-100 shadow-sm overflow-hidden">
+            <div id="graph-container" class="w-full h-full bg-base-200"></div>
+        </div>
+
+        <!-- Node detail panel -->
+        <div id="node-detail-panel" class="w-80 card bg-base-100 shadow-sm hidden overflow-y-auto">
+            <div class="card-body p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 id="detail-label" class="font-bold text-base"></h3>
+                    <button id="detail-close" class="btn btn-ghost btn-xs btn-circle">✕</button>
+                </div>
+                <div id="detail-badge" class="mb-3"></div>
+                <div id="detail-fields" class="space-y-2 text-sm"></div>
+
+                <!-- Action buttons -->
+                <div class="divider my-2"></div>
+                <div class="space-y-2">
+                    <button id="action-edit" class="btn btn-sm btn-outline btn-block justify-start gap-2" onclick="showToast('Edit node — coming soon')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        Edit Node
+                    </button>
+                    <button id="action-add-child" class="btn btn-sm btn-outline btn-primary btn-block justify-start gap-2" onclick="showToast('Add child node — coming soon')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Add Child Node
+                    </button>
+                    <button id="action-add-rel" class="btn btn-sm btn-outline btn-secondary btn-block justify-start gap-2" onclick="showToast('Add relationship — coming soon')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                        Add Relationship
+                    </button>
+                    <button id="action-delete" class="btn btn-sm btn-outline btn-error btn-block justify-start gap-2" onclick="showToast('Delete node — coming soon')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        Delete Node
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="graph-status" class="mt-2 text-sm text-base-content/60 text-center shrink-0"></div>
 </div>
 
 <!-- Tab: Upload Materials -->
-<div id="tab-upload" class="tab-content hidden">
+<div id="tab-upload" class="settings-panel hidden">
     <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <h3 class="font-semibold text-lg mb-4">Upload Course Materials</h3>
+            <p class="text-sm text-base-content/70 mb-4">
+                Upload PDF, PowerPoint, or HTML files to add new knowledge to this course.
+            </p>
+            
             <form
                 id="course-upload-form"
                 hx-post="{{ url_for('course.upload_to_course', course_id=course_id) }}"
                 hx-encoding="multipart/form-data"
                 hx-swap="none"
+                class="space-y-4"
             >
-                <div class="form-control">
+                <div class="form-control w-full">
                     <label class="label">
-                        <span class="label-text">Select Files</span>
+                        <span class="label-text font-medium">Select Files to Upload</span>
+                        <span class="label-text-alt">Supported: PDF, PowerPoint, HTML</span>
                     </label>
                     <input
                         type="file"
@@ -78,34 +125,41 @@
                         multiple
                         required
                         accept="{{ allowed_extensions|join(',') }}"
-                        class="file-input file-input-bordered"
+                        class="file-input file-input-bordered w-full"
                     />
                 </div>
-                <div class="mt-4">
+                
+                <div class="flex gap-2">
                     <button type="submit" class="btn btn-primary">
-                        <span class="htmx-indicator loading loading-spinner loading-xs"></span>
-                        Upload
+                        <span class="htmx-indicator hidden">
+                            <span class="loading loading-spinner loading-xs"></span>
+                        </span>
+                        Upload and Process Files
                     </button>
                 </div>
             </form>
 
             <!-- Upload list -->
-            <div class="divider"></div>
-            <h4 class="font-medium mb-2">Recent Uploads</h4>
+            <div class="divider mt-6 mb-6"></div>
+            
+            <h4 class="font-medium mb-4">Recent Uploads</h4>
             <div
                 id="upload-list"
                 hx-get="{{ url_for('knowledge.upload_list') }}"
                 hx-trigger="load, every 5s"
                 hx-swap="innerHTML"
+                class="min-h-[100px]"
             >
-                <span class="loading loading-spinner loading-sm"></span>
+                <div class="flex justify-center py-8">
+                    <span class="loading loading-spinner loading-md"></span>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Tab: Agent Prompts (WIP) -->
-<div id="tab-prompts" class="tab-content hidden">
+<div id="tab-prompts" class="settings-panel hidden">
     <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <div class="alert alert-warning">
@@ -120,7 +174,7 @@
 </div>
 
 <!-- Tab: Domain Language (WIP) -->
-<div id="tab-domain" class="tab-content hidden">
+<div id="tab-domain" class="settings-panel hidden">
     <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <div class="alert alert-warning">
@@ -134,24 +188,292 @@
     </div>
 </div>
 
+<script src="https://unpkg.com/@antv/g6@4.8.24/dist/g6.min.js"></script>
 <script>
-    // Tab switching
-    document.querySelectorAll('#settings-tabs .tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('#settings-tabs .tab').forEach(t => t.classList.remove('tab-active'));
-            tab.classList.add('tab-active');
+    /* ── Tab switching ── */
+    function initTabs() {
+        const tabs = document.querySelectorAll('#settings-tabs .tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                tabs.forEach(t => t.classList.remove('tab-active'));
+                this.classList.add('tab-active');
+                document.querySelectorAll('.settings-panel').forEach(c => c.classList.add('hidden'));
+                const sel = document.getElementById('tab-' + this.getAttribute('data-tab'));
+                if (sel) sel.classList.remove('hidden');
+                window.location.hash = this.getAttribute('data-tab');
 
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-            document.getElementById('tab-' + tab.dataset.tab).classList.remove('hidden');
+                // Resize graph when switching to graph tab
+                if (this.getAttribute('data-tab') === 'graph' && g6Graph) {
+                    requestAnimationFrame(() => {
+                        const c = document.getElementById('graph-container');
+                        g6Graph.changeSize(c.clientWidth, c.clientHeight);
+                        g6Graph.fitView(20);
+                    });
+                }
+            });
         });
-    });
+    }
 
-    // Upload form success handler
+    function handleInitialHash() {
+        const hash = window.location.hash.substring(1);
+        if (hash) {
+            const tab = document.querySelector(`#settings-tabs .tab[data-tab="${hash}"]`);
+            if (tab) tab.click();
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => { initTabs(); handleInitialHash(); });
+    } else {
+        initTabs();
+        handleInitialHash();
+    }
+
+    /* ── Upload handler ── */
     document.body.addEventListener("htmx:afterRequest", function (evt) {
-        if (evt.detail.target.id === "course-upload-form" && evt.detail.successful) {
-            evt.detail.target.reset();
-            htmx.trigger("#upload-list", "load");
+        if (evt.detail.target.id === "course-upload-form") {
+            const ok = evt.detail.successful;
+            const alertDiv = document.createElement('div');
+            alertDiv.className = ok ? 'alert alert-success mb-4' : 'alert alert-error mb-4';
+            alertDiv.innerHTML = ok
+                ? '<span>Files uploaded successfully! Processing in progress...</span>'
+                : '<span>Upload failed. Please try again.</span>';
+            evt.detail.target.parentElement.insertBefore(alertDiv, evt.detail.target);
+            setTimeout(() => alertDiv.remove(), 5000);
+            if (ok) {
+                evt.detail.target.reset();
+                htmx.trigger("#upload-list", "load");
+            }
         }
     });
+
+    /* ── Toast helper ── */
+    function showToast(msg) {
+        const t = document.createElement('div');
+        t.className = 'alert alert-info text-sm shadow-lg';
+        t.innerHTML = '<span>' + msg + '</span>';
+        const container = document.getElementById('toast-container');
+        container.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
+    /* ── Graph ── */
+    const courseId = {{ course_id | tojson }};
+    const graphContainer = document.getElementById('graph-container');
+    const statusEl = document.getElementById('graph-status');
+    const stats = {
+        total: document.getElementById('stat-total'),
+        conceptual: document.getElementById('stat-conceptual'),
+        procedural: document.getElementById('stat-procedural'),
+        assessment: document.getElementById('stat-assessment'),
+    };
+    let g6Graph = null;
+    let allNodesRaw = {}; // id -> raw node data for detail panel
+
+    function normalizeType(t) { return String(t || 'root').toLowerCase(); }
+
+    function getNodeColor(t) {
+        const n = normalizeType(t);
+        if (n === 'root') return '#E879F9';
+        if (n === 'conceptual') return '#60A5FA';
+        if (n === 'procedural') return '#34D399';
+        if (n === 'assessment') return '#F59E0B';
+        return '#9CA3AF';
+    }
+
+    function collectChildren(node) {
+        if (normalizeType(node.type) === 'procedural') return node.child ? [node.child] : [];
+        return Array.isArray(node.children) ? node.children : [];
+    }
+
+    function flattenNodes(root) {
+        const q = [root], result = [];
+        while (q.length) {
+            const c = q.shift();
+            result.push(c);
+            collectChildren(c).forEach(ch => q.push(ch));
+        }
+        return result;
+    }
+
+    function buildGraphData(root) {
+        const nodeMap = new Map(), edges = [];
+        function addNode(n) {
+            if (!n || !n.id || nodeMap.has(n.id)) return;
+            const t = normalizeType(n.type);
+            allNodesRaw[n.id] = n;
+            nodeMap.set(n.id, {
+                id: n.id,
+                label: (n.label || n.name || n.id).substring(0, 24),
+                nodeType: t,
+                style: { fill: getNodeColor(t), stroke: '#1F2937', lineWidth: 2 },
+            });
+        }
+        function addEdge(s, t, rel) {
+            if (!s || !t) return;
+            const color = rel === 'HAS_CHILD' ? '#60A5FA' : '#9CA3AF';
+            edges.push({
+                source: s, target: t, label: rel || 'HAS_CHILD',
+                style: { stroke: color, endArrow: { path: G6.Arrow.triangle(8, 10, 0), fill: color } },
+            });
+        }
+        function walk(n) {
+            addNode(n);
+            collectChildren(n).forEach(ch => { addNode(ch); addEdge(n.id, ch.id, 'HAS_CHILD'); walk(ch); });
+            if (Array.isArray(n.connections)) n.connections.forEach(c => addEdge(n.id, c.to, c.relation));
+        }
+        walk(root);
+        return { nodes: Array.from(nodeMap.values()), edges };
+    }
+
+    function renderGraph(data) {
+        if (g6Graph) g6Graph.destroy();
+        const w = graphContainer.clientWidth, h = graphContainer.clientHeight;
+        g6Graph = new G6.Graph({
+            container: graphContainer, width: w, height: h,
+            modes: { default: ['drag-canvas', 'zoom-canvas', 'click-select'] },
+            layout: { type: 'dagre', rankdir: 'LR', nodesep: 50, ranksep: 100 },
+            defaultNode: {
+                size: 40,
+                style: { stroke: '#1F2937', lineWidth: 2 },
+                labelCfg: { style: { fill: '#1F2937', fontSize: 11 } },
+            },
+            defaultEdge: {
+                type: 'polyline',
+                style: { radius: 10, endArrow: true },
+                labelCfg: { autoRotate: true, style: { fill: '#6B7280', fontSize: 9, background: { fill: '#F3F4F6', padding: [2, 4, 2, 4], radius: 2 } } },
+            },
+            fitView: true, fitViewPadding: 20,
+        });
+
+        g6Graph.node(node => ({
+            style: { fill: getNodeColor(node.nodeType), stroke: '#1F2937', lineWidth: 2 },
+        }));
+
+        g6Graph.on('node:click', evt => {
+            const nodeId = evt.item.getModel().id;
+            showNodeDetail(nodeId);
+        });
+        g6Graph.on('canvas:click', () => hideNodeDetail());
+
+        g6Graph.data(data);
+        g6Graph.render();
+        g6Graph.fitView();
+    }
+
+    /* ── Node detail panel ── */
+    const detailPanel = document.getElementById('node-detail-panel');
+    const detailLabel = document.getElementById('detail-label');
+    const detailBadge = document.getElementById('detail-badge');
+    const detailFields = document.getElementById('detail-fields');
+    document.getElementById('detail-close').addEventListener('click', hideNodeDetail);
+
+    function hideNodeDetail() {
+        detailPanel.classList.add('hidden');
+        if (g6Graph) {
+            g6Graph.getNodes().forEach(n => g6Graph.clearItemStates(n));
+        }
+    }
+
+    function showNodeDetail(nodeId) {
+        const raw = allNodesRaw[nodeId];
+        if (!raw) return;
+
+        // Highlight selected node
+        if (g6Graph) {
+            g6Graph.getNodes().forEach(n => g6Graph.clearItemStates(n));
+            const item = g6Graph.findById(nodeId);
+            if (item) g6Graph.setItemState(item, 'selected', true);
+        }
+
+        const t = normalizeType(raw.type);
+        detailLabel.textContent = raw.label || raw.name || raw.id;
+
+        const badgeColors = { root: 'badge-secondary', conceptual: 'badge-info', procedural: 'badge-success', assessment: 'badge-warning' };
+        detailBadge.innerHTML = '<span class="badge ' + (badgeColors[t] || 'badge-neutral') + ' badge-sm">' + t + '</span>'
+            + (raw.difficulty ? ' <span class="badge badge-outline badge-sm">' + raw.difficulty + '</span>' : '');
+
+        let html = '';
+        function field(label, val) {
+            if (val === undefined || val === null || val === '') return;
+            if (Array.isArray(val)) {
+                if (!val.length) return;
+                val = val.map(v => '<span class="badge badge-outline badge-xs">' + escHtml(String(v)) + '</span>').join(' ');
+                html += '<div><span class="font-medium text-base-content/70">' + label + '</span><div class="flex flex-wrap gap-1 mt-1">' + val + '</div></div>';
+                return;
+            }
+            html += '<div><span class="font-medium text-base-content/70">' + label + ':</span> ' + escHtml(String(val)) + '</div>';
+        }
+
+        function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        field('ID', raw.id);
+        if (t === 'conceptual') {
+            field('Bloom Level', raw.bloom_level);
+            field('Definition', raw.definition);
+            field('Prerequisites', raw.prerequisites);
+            field('Misconceptions', raw.misconceptions);
+            field('Learning Objective', raw.learning_objective);
+            field('Source', raw.source);
+            field('Confidence', raw.confidence_score !== undefined ? (raw.confidence_score * 100).toFixed(0) + '%' : undefined);
+            field('Relevance', raw.relevance_score !== undefined ? (raw.relevance_score * 100).toFixed(0) + '%' : undefined);
+            field('Validation', raw.validation_status);
+            if (raw.connections && raw.connections.length) {
+                field('Connections', raw.connections.map(c => c.relation + ' → ' + c.to));
+            }
+        } else if (t === 'procedural') {
+            field('Bloom Level', raw.bloom_level);
+            field('Progress', raw.percent_done !== undefined ? raw.percent_done + '%' : undefined);
+            field('Common Errors', raw.common_errors);
+            field('Learning Objective', raw.learning_objective);
+            field('Source', raw.source);
+            field('Confidence', raw.confidence_score !== undefined ? (raw.confidence_score * 100).toFixed(0) + '%' : undefined);
+            field('Relevance', raw.relevance_score !== undefined ? (raw.relevance_score * 100).toFixed(0) + '%' : undefined);
+            field('Validation', raw.validation_status);
+        } else if (t === 'assessment') {
+            field('Bloom Level', raw.bloom_level);
+            field('Objectives', raw.objectives);
+            field('Questions', raw.question_prompts);
+            field('Linked Challenges', raw.linked_challenges);
+            field('Evaluation Criteria', raw.evaluation_criteria);
+        } else if (t === 'root') {
+            field('Description', raw.description);
+            field('Sources', raw.sources);
+        }
+
+        detailFields.innerHTML = html;
+        detailPanel.classList.remove('hidden');
+    }
+
+    /* ── Load graph data ── */
+    async function loadCourseGraph() {
+        statusEl.textContent = 'Loading graph...';
+        allNodesRaw = {};
+
+        try {
+            const resp = await fetch('/knowledge/graph/data/' + encodeURIComponent(courseId));
+            if (!resp.ok) throw new Error('Request failed (' + resp.status + ')');
+
+            const root = await resp.json();
+            const nodes = flattenNodes(root);
+
+            stats.total.textContent = nodes.length;
+            stats.conceptual.textContent = nodes.filter(n => normalizeType(n.type) === 'conceptual').length;
+            stats.procedural.textContent = nodes.filter(n => normalizeType(n.type) === 'procedural').length;
+            stats.assessment.textContent = nodes.filter(n => normalizeType(n.type) === 'assessment').length;
+
+            renderGraph(buildGraphData(root));
+            statusEl.textContent = 'Click a node to view details and actions.';
+        } catch (err) {
+            stats.total.textContent = '0';
+            stats.conceptual.textContent = '0';
+            stats.procedural.textContent = '0';
+            stats.assessment.textContent = '0';
+            statusEl.textContent = 'No graph data yet — upload materials to generate the knowledge graph.';
+        }
+    }
+
+    loadCourseGraph();
 </script>
 {% endblock %}
