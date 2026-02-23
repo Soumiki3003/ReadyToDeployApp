@@ -95,6 +95,9 @@ class KnowledgeUploadService:
 class KnowledgeService:
     __uploads: dict[str, models.KnowledgeUploadRecord] = {}
     __child_relation_type = "HAS_CHILD"
+    __teaches_rel_type = "TEACHES"
+    __enrolled_rel_type = "ENROLLED_IN"
+    __user_node_name = "User"
 
     def __init__(
         self,
@@ -260,22 +263,38 @@ class KnowledgeService:
             return session.execute_read(txn_fn, knowledge_id=knowledge_id)
 
     def get_root_nodes(
-        self, limit: int | None = 5, offset: int = 0
+        self,
+        limit: int | None = 5,
+        offset: int = 0,
+        user_id: str | None = None,
+        user_role: str | None = None,
     ) -> list[schemas.KnowledgeRootNode]:
         if offset < 0:
             raise ValueError("Offset must be non-negative")
         if limit is not None and limit < 1:
             raise ValueError("Limit must be at least 1 when provided")
 
+        if user_id and user_role == models.UserRole.INSTRUCTOR:
+            match_clause = f"MATCH (u:{self.__user_node_name} {{id: $user_id}})-[:{self.__teaches_rel_type}]->(n {{type: $root_type}}) "
+        elif user_id and user_role == models.UserRole.STUDENT:
+            match_clause = f"MATCH (u:{self.__user_node_name} {{id: $user_id}})-[:{self.__enrolled_rel_type}]->(n {{type: $root_type}}) "
+        else:
+            match_clause = "MATCH (n {type: $root_type}) "
+
+        query = (
+            match_clause
+            + "RETURN n.id AS id, n.name AS name, n.description AS description, n.sources AS sources "
+            "ORDER BY coalesce(n.updated_at, n.created_at) DESC "
+            "SKIP $offset " + ("LIMIT $limit" if limit is not None else "")
+        )
+
         with self.__session_factory() as session:
             result = session.run(
-                "MATCH (n {type: $root_type}) "
-                "RETURN n.id AS id, n.name AS name, n.description AS description, n.sources AS sources "
-                "ORDER BY coalesce(n.updated_at, n.created_at) DESC "
-                "SKIP $offset " + ("LIMIT $limit" if limit is not None else ""),
+                query,
                 root_type=models.KnowledgeType.ROOT,
                 offset=offset,
                 limit=limit,
+                user_id=user_id,
             ).data()
         return [
             schemas.KnowledgeRootNode(
@@ -364,7 +383,13 @@ class KnowledgeService:
             self.__upload_service.mark_as_failed(upload_id, error=str(e))
             raise
 
-    def create_empty_course(self, name: str, description: str = "") -> str:
+    def create_empty_course(
+        self,
+        name: str,
+        description: str = "",
+        instructor_ids: list[str] | None = None,
+        student_ids: list[str] | None = None,
+    ) -> str:
         self.__logger.info(f"Creating empty course: {name}")
         root_knowledge = models.RootKnowledge(
             name=name,
@@ -372,6 +397,12 @@ class KnowledgeService:
             sources=[],
         )
         knowledge_id = self.create_knowledge(root_knowledge)
+
+        if instructor_ids:
+            self.set_course_instructors(knowledge_id, instructor_ids)
+        if student_ids:
+            self.set_course_students(knowledge_id, student_ids)
+
         self.__logger.info(f"Empty course created with ID: {knowledge_id}")
         return knowledge_id
 
@@ -724,6 +755,67 @@ class KnowledgeService:
             session.execute_write(txn_fn)
 
         self.__logger.info(f"Course {course_id} cleared successfully")
+
+    def __set_course_relationship(
+        self, course_id: str, user_ids: list[str], rel_type: str
+    ) -> None:
+        def txn_fn(tx):
+            tx.run(
+                f"MATCH (u:{self.__user_node_name})-[r:{rel_type}]->(n {{id: $course_id, type: $root_type}}) DELETE r",
+                course_id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            )
+            if user_ids:
+                tx.run(
+                    f"MATCH (n {{id: $course_id, type: $root_type}}) "
+                    "UNWIND $user_ids AS uid "
+                    f"MATCH (u:{self.__user_node_name} {{id: uid}}) "
+                    f"CREATE (u)-[:{rel_type}]->(n)",
+                    course_id=course_id,
+                    root_type=models.KnowledgeType.ROOT.value,
+                    user_ids=user_ids,
+                )
+
+        with self.__session_factory() as session:
+            session.execute_write(txn_fn)
+
+    def set_course_instructors(self, course_id: str, instructor_ids: list[str]) -> None:
+        """Replace all TEACHES relationships for a course with the given instructor IDs."""
+        self.__logger.info(
+            f"Setting instructors for course {course_id}: {instructor_ids}"
+        )
+        self.__set_course_relationship(
+            course_id, instructor_ids, self.__teaches_rel_type
+        )
+
+    def set_course_students(self, course_id: str, student_ids: list[str]) -> None:
+        """Replace all ENROLLED_IN relationships for a course with the given student IDs."""
+        self.__logger.info(f"Setting students for course {course_id}: {student_ids}")
+        self.__set_course_relationship(course_id, student_ids, self.__enrolled_rel_type)
+
+    def __get_course_users_by_rel(
+        self, course_id: str, rel_type: str
+    ) -> list[schemas.CourseMember]:
+        with self.__session_factory() as session:
+            result = session.run(
+                f"MATCH (u:{self.__user_node_name})-[:{rel_type}]->(n {{id: $course_id, type: $root_type}}) "
+                "RETURN u.id AS id, u.name AS name, u.email AS email, u.role AS role",
+                course_id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+            ).data()
+        return [schemas.CourseMember(**r) for r in result]
+
+    def get_course_members(
+        self, course_id: str
+    ) -> dict[str, list[schemas.CourseMember]]:
+        """Get all instructors and students for a course."""
+        instructors = self.__get_course_users_by_rel(course_id, self.__teaches_rel_type)
+        students = self.__get_course_users_by_rel(course_id, self.__enrolled_rel_type)
+
+        return {
+            "instructors": instructors,
+            "students": students,
+        }
 
     def create_knowledge(self, root: models.RootKnowledge) -> str:
         with self.__session_factory() as session:

@@ -26,7 +26,13 @@ from .file import (
 
 from .common import Paginated
 from .auth import LoginRequest
-from .course import CreateCourse, ChatUserMessageFormRequest
+from .course import (
+    CreateCourse,
+    UpdateCourseMembers,
+    CourseMember,
+    PaginatedCourses,
+    ChatUserMessageFormRequest,
+)
 
 __all__ = [
     "CreateUser",
@@ -37,8 +43,11 @@ __all__ = [
     "HTMLTextualContent",
     "TextualContent",
     "Paginated",
+    "PaginatedCourses",
     "LoginRequest",
     "CreateCourse",
+    "UpdateCourseMembers",
+    "CourseMember",
     "ChatUserMessageFormRequest",
     "UpdateNodeRequest",
     "UpdateRootNodeRequest",

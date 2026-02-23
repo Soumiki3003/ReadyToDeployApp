@@ -24,6 +24,7 @@ def load_user(user_id: str):
     except Exception as e:
         # Log the error but don't crash the app
         import logging
+
         logging.getLogger(__name__).error(f"Error loading user {user_id}: {e}")
         return None
 

@@ -1,5 +1,5 @@
 from dependency_injector.wiring import Provide, inject
-from flask import Blueprint, render_template, request
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
 from flask_pydantic import validate
 
@@ -23,7 +23,15 @@ def dashboard(
     ],
     allowed_extensions: list[str] = Provide[Application.core.allowed_extensions],
 ):
-    courses, has_next = course_controller.get_courses(form)
+    paginated_courses = schemas.PaginatedCourses(
+        page=form.page,
+        page_size=form.page_size,
+        user_id=current_user.id,
+        user_role=current_user.role.value,
+    )
+    courses, has_next = course_controller.get_courses(paginated_courses)
+    all_instructors = course_controller.get_users_by_role("instructor")
+    all_students = course_controller.get_users_by_role("student")
 
     return render_template(
         "course/dashboard.html",
@@ -32,6 +40,8 @@ def dashboard(
         page_size=form.page_size,
         has_next=has_next,
         allowed_extensions=allowed_extensions,
+        all_instructors=all_instructors,
+        all_students=all_students,
     )
 
 
@@ -40,13 +50,13 @@ def dashboard(
 @validate()
 @inject
 def create_course(
-    form: schemas.CreateCourse,
+    body: schemas.CreateCourse,
     *,
     course_controller: controllers.CourseController = Provide[
         Application.controllers.course_controller
     ],
 ):
-    course_id = course_controller.create_course(form)
+    course_id = course_controller.create_course(body, creator_id=current_user.id)
     return {"id": course_id, "redirect": "/"}, 201
 
 
@@ -110,6 +120,9 @@ def settings(
 ):
     course = course_controller.get_course(course_id)
     uploads = course_controller.get_uploads()
+    members = course_controller.get_course_members(course_id)
+    all_instructors = course_controller.get_users_by_role("instructor")
+    all_students = course_controller.get_users_by_role("student")
     return render_template(
         "course/settings.html",
         course=course,
@@ -118,6 +131,49 @@ def settings(
         allowed_extensions=allowed_extensions,
         allowed_children=ALLOWED_CHILDREN,
         bloom_levels=BLOOM_LEVELS,
+        members=members,
+        all_instructors=all_instructors,
+        all_students=all_students,
+    )
+
+
+@app.route("/course/<course_id>/members", methods=["PUT"])
+@roles_required("instructor")
+@validate()
+@inject
+def update_members(
+    course_id: str,
+    body: schemas.UpdateCourseMembers,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    try:
+        course_controller.update_course_members(course_id, body)
+        return {"success": True}, 200
+    except ValueError as e:
+        return {"error": str(e)}, 404
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/course/<course_id>/members", methods=["GET"])
+@roles_required("instructor")
+@inject
+def get_members(
+    course_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    members = course_controller.get_course_members(course_id)
+    return jsonify(
+        {
+            "instructors": [m.model_dump() for m in members["instructors"]],
+            "students": [m.model_dump() for m in members["students"]],
+        }
     )
 
 

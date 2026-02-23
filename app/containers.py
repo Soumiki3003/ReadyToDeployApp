@@ -185,6 +185,7 @@ class Controllers(containers.DeclarativeContainer):
     course_controller = providers.Factory(
         controllers.CourseController,
         knowledge_service=services.knowledge,
+        user_service=services.user,
         uploads_folder=core.uploads_folder,
         uploads_service=services.knowledge_upload,
     )

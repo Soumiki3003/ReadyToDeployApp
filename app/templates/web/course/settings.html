@@ -29,6 +29,7 @@
 <div class="tabs tabs-boxed mb-6" id="settings-tabs">
     <a class="tab tab-active" data-tab="graph">Knowledge Graph</a>
     <a class="tab" data-tab="upload">Upload Materials</a>
+    <a class="tab" data-tab="members">Members</a>
     <a class="tab" data-tab="prompts">Agent Prompts</a>
     <a class="tab" data-tab="domain">Domain Language</a>
 </div>
@@ -368,6 +369,70 @@
                     <span class="loading loading-spinner loading-md"></span>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab: Members -->
+<div id="tab-members" class="settings-panel hidden">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <h3 class="font-semibold text-lg mb-4">Course Members</h3>
+            <p class="text-sm text-base-content/70 mb-4">
+                Manage which instructors and students are associated with this course.
+            </p>
+
+            <form id="members-form" class="space-y-6">
+                <!-- Instructors -->
+                <div>
+                    <h4 class="font-medium mb-2">Instructors</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-lg border-base-300">
+                        {% for instructor in all_instructors %}
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                class="checkbox checkbox-sm members-instructor-cb"
+                                value="{{ instructor.id }}"
+                                {{ 'checked' if instructor.id in members.instructors|map(attribute='id')|list }}
+                            />
+                            <span class="text-sm">{{ instructor.name }}</span>
+                            <span class="text-xs text-base-content/50">{{ instructor.email }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Students -->
+                <div>
+                    <h4 class="font-medium mb-2">Students</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-lg border-base-300">
+                        {% if all_students %}
+                        {% for student in all_students %}
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                class="checkbox checkbox-sm members-student-cb"
+                                value="{{ student.id }}"
+                                {{ 'checked' if student.id in members.students|map(attribute='id')|list }}
+                            />
+                            <span class="text-sm">{{ student.name }}</span>
+                            <span class="text-xs text-base-content/50">{{ student.email }}</span>
+                        </label>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No students registered yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm" id="save-members-btn">
+                        <span class="loading loading-spinner loading-xs hidden" id="save-members-spinner"></span>
+                        Save Members
+                    </button>
+                    <span id="members-status" class="text-sm self-center"></span>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -1242,5 +1307,42 @@
     function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
     loadCourseGraph();
+
+    /* ── Members form ── */
+    document.getElementById("members-form")?.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const spinner = document.getElementById("save-members-spinner");
+        const btn = document.getElementById("save-members-btn");
+        const status = document.getElementById("members-status");
+        spinner.classList.remove("hidden");
+        btn.disabled = true;
+        status.textContent = "";
+
+        const instructorIds = Array.from(document.querySelectorAll(".members-instructor-cb:checked")).map(cb => cb.value);
+        const studentIds = Array.from(document.querySelectorAll(".members-student-cb:checked")).map(cb => cb.value);
+
+        try {
+            const resp = await fetch("{{ url_for('course.update_members', course_id=course_id) }}", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ instructor_ids: instructorIds, student_ids: studentIds }),
+            });
+            if (resp.ok) {
+                status.textContent = "Members updated successfully.";
+                status.className = "text-sm self-center text-success";
+            } else {
+                const data = await resp.json();
+                status.textContent = data.error || "Failed to update members.";
+                status.className = "text-sm self-center text-error";
+            }
+        } catch (err) {
+            status.textContent = "Network error.";
+            status.className = "text-sm self-center text-error";
+        } finally {
+            spinner.classList.add("hidden");
+            btn.disabled = false;
+            setTimeout(() => { status.textContent = ""; }, 3000);
+        }
+    });
 </script>
 {% endblock %}

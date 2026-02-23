@@ -354,6 +354,20 @@ class UserService:
         with self.__session_factory() as session:
             return session.execute_write(tx_fn, trajectory_id, increment)
 
+    def get_users_by_role(self, role: str) -> list[models.User]:
+        @unit_of_work()
+        def tx_fn(tx: ManagedTransaction, role: str) -> list[models.User]:
+            query = (
+                f"MATCH (u:{self.__user_node_name}) "
+                "WHERE u.role = $role AND u.enabled = true "
+                "RETURN u ORDER BY u.name"
+            )
+            result = tx.run(query, role=role)
+            return [models.User(**record["u"]) for record in result]
+
+        with self.__session_factory() as session:
+            return session.execute_read(tx_fn, role)
+
     def delete_user(self, id: str) -> None:
         to_update = schemas.UpdateUser(enabled=False)
         self.update_user(id, to_update=to_update)
