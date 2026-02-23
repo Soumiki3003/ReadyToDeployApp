@@ -279,10 +279,11 @@ class RootKnowledge(BaseModel):
         default="Central node",
         description="Display name for the knowledge graph root node (course title).",
     )
-    description: str = Field(
-        default="",
+    description: str | None = Field(
+        default=None,
         description="Description of the course or knowledge domain covered by this graph.",
     )
+
     sources: list[str] = Field(
         default_factory=list,
         description="List of source files that contributed to this knowledge graph.",
