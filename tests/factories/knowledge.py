@@ -1,3 +1,4 @@
+import pytest
 from polyfactory.factories.pydantic_factory import ModelFactory
 from app import models
 
@@ -49,3 +50,35 @@ class RootKnowledgeFactory(ModelFactory[models.RootKnowledge]):
                         )
                     )
         return concepts
+
+@pytest.fixture
+def conceptual_knowledge_factory():
+    return ConceptualKnowledgeFactory
+
+@pytest.fixture
+def conceptual_knowledge(conceptual_knowledge_factory):
+    return conceptual_knowledge_factory.build()
+
+@pytest.fixture
+def procedural_knowledge_factory():
+    return ProceduralKnowledgeFactory
+
+@pytest.fixture
+def procedural_knowledge(procedural_knowledge_factory):
+    return procedural_knowledge_factory.build()
+
+@pytest.fixture
+def assessment_knowledge_factory():
+    return AssessmentKnowledgeFactory
+
+@pytest.fixture
+def assessment_knowledge(assessment_knowledge_factory):
+    return assessment_knowledge_factory.build()
+
+@pytest.fixture
+def root_knowledge_factory():
+    return RootKnowledgeFactory
+
+@pytest.fixture
+def root_knowledge(root_knowledge_factory):
+    return root_knowledge_factory.build()

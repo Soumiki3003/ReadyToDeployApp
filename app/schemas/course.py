@@ -33,3 +33,8 @@ class CourseMember(BaseModel):
 class PaginatedCourses(Paginated):
     user_id: str | None = None
     user_role: str | None = None
+
+
+class CreateManualHint(BaseModel):
+    student_id: str = Field(description="ID of the student to receive the hint, or 'all'")
+    hint_text: str = Field(description="The hint content")

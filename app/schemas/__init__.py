@@ -29,6 +29,7 @@ from .auth import LoginRequest
 from .chat import ChatResponse, ChatUserMessageFormRequest, UpdateHintApprovalRequest
 from .course import (
     CreateCourse,
+    CreateManualHint,
     UpdateCourseMembers,
     CourseMember,
     PaginatedCourses,
@@ -46,6 +47,7 @@ __all__ = [
     "PaginatedCourses",
     "LoginRequest",
     "CreateCourse",
+    "CreateManualHint",
     "UpdateCourseMembers",
     "CourseMember",
     "ChatUserMessageFormRequest",

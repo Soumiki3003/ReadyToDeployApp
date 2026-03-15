@@ -317,6 +317,35 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Create Hint Modal -->
+<dialog id="create-hint-modal" class="modal">
+    <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg mb-4">Create Manual Hint</h3>
+        <form id="create-hint-form" class="space-y-3"
+              hx-post="{{ url_for('course.create_manual_hint', course_id=course_id) }}"
+              hx-swap="none">
+            <div class="form-control w-full">
+                <label class="label"><span class="label-text">Select Student</span></label>
+                <select name="student_id" class="select select-bordered select-sm w-full" required>
+                    <option value="all">All Students</option>
+                    {% for student in all_students %}
+                    <option value="{{ student.id }}">{{ student.name }} ({{ student.email }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label"><span class="label-text">Hint Text</span></label>
+                <textarea name="hint_text" class="textarea textarea-bordered textarea-sm w-full h-24" required placeholder="Type the hint here..."></textarea>
+            </div>
+            <div class="modal-action">
+                <button type="button" class="btn btn-sm" onclick="document.getElementById('create-hint-modal').close()">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-primary">Send Hint</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Tab: Upload Materials -->
 <div id="tab-upload" class="settings-panel hidden">
     <div class="card bg-base-100 shadow-sm">
@@ -475,17 +504,23 @@
 <div id="tab-hints" class="settings-panel hidden">
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Pending Hints</h2>
-        <button
-            class="btn btn-sm btn-outline"
-            hx-get="{{ url_for('course.get_hints', course_id=course_id) }}"
-            hx-target="#hints-list"
-            hx-swap="innerHTML"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-        </button>
+        <div class="flex gap-2">
+            <button class="btn btn-sm btn-primary" onclick="openCreateHintModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Create Hint
+            </button>
+            <button
+                class="btn btn-sm btn-outline"
+                hx-get="{{ url_for('course.get_hints', course_id=course_id) }}"
+                hx-target="#hints-list"
+                hx-swap="innerHTML"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+            </button>
+        </div>
     </div>
     <p class="text-sm text-base-content/60 mb-4">
         Review and approve hints that the system generated for students in this course. Only approved hints are shown to students.
@@ -541,7 +576,7 @@
         handleInitialHash();
     }
 
-    /* ── Upload handler ── */
+    /* ── htmx global handler ── */
     document.body.addEventListener("htmx:afterRequest", function (evt) {
         if (evt.detail.target.id === "course-upload-form") {
             const ok = evt.detail.successful;
@@ -557,16 +592,38 @@
                 htmx.trigger("#upload-list", "load");
             }
         }
+        
+        if (evt.detail.target.id === "create-hint-form") {
+            const ok = evt.detail.successful;
+            if (ok) {
+                document.getElementById('create-hint-modal').close();
+                showToast("Hint created and sent successfully", "success");
+            } else {
+                showToast("Failed to create hint", "error");
+            }
+        }
     });
 
     /* ── Toast helper ── */
     function showToast(msg, type = 'info') {
         const t = document.createElement('div');
-        t.className = 'alert alert-' + type + ' text-sm shadow-lg';
+        t.className = 'alert alert-' + type + ' text-sm shadow-lg mb-2 z-50';
         t.innerHTML = '<span>' + msg + '</span>';
-        const container = document.getElementById('toast-container');
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast toast-top toast-center z-50';
+            document.body.appendChild(container);
+        }
         container.appendChild(t);
         setTimeout(() => t.remove(), 3000);
+    }
+
+    /* ── Hints ── */
+    function openCreateHintModal() {
+        document.getElementById('create-hint-form').reset();
+        document.getElementById('create-hint-modal').showModal();
     }
 
     /* ── Clear course ── */

@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from app import models, schemas, services
 
@@ -56,14 +57,32 @@ class CourseController:
             student_ids=list(params.student_ids),
         )
 
-    def upload_to_course(self, course_id: str, files: list[FileStorage]) -> None:
+    def upload_to_course(self, course_id: str, files: list[FileStorage]) -> int:
+        """Save and process each uploaded file.
+
+        Returns the number of files actually processed.
+        Raises ValueError if every supplied file was rejected (empty list or all
+        filenames reduced to nothing after sanitisation).
+        """
         self.__logger.info(f"Uploading {len(files)} file(s) to course {course_id}")
+        processed = 0
         for f in files:
             if f and f.filename:
-                filepath = self.__uploads_folder / f.filename
+                safe_name = secure_filename(f.filename)
+                if not safe_name:
+                    self.__logger.warning(
+                        f"Rejected upload with unsafe filename: {f.filename!r}"
+                    )
+                    continue
+                filepath = self.__uploads_folder / safe_name
                 f.save(filepath)
                 self.__logger.info(f"File saved: {filepath}")
                 self.__knowledge_service.add_document_to_course(course_id, filepath)
+                processed += 1
+
+        if processed == 0:
+            raise ValueError("No valid files to process. All filenames were empty or unsafe.")
+        return processed
 
     def get_uploads(self, page: int = 1, page_size: int = 10):
         if page <= 0 or page_size <= 0:
@@ -158,3 +177,26 @@ class CourseController:
     def delete_course(self, course_id: str) -> None:
         self.__logger.info(f"Deleting course: {course_id}")
         self.__knowledge_service.delete_course(course_id)
+
+    def create_manual_hint(self, course_id: str, params: schemas.CreateManualHint) -> None:
+        self.__logger.info(f"Instructor creating manual hint for course {course_id}")
+        
+        target_student_ids = []
+        if params.student_id == "all":
+            members = self.get_course_members(course_id)
+            target_student_ids = [s.id for s in members["students"]]
+        else:
+            target_student_ids = [params.student_id]
+            
+        for s_id in target_student_ids:
+            trajectory = models.UserTrajectory(
+                user_id=s_id,
+                course_id=course_id,
+                query="Manual Hint from Instructor",
+                interaction_type="manual_hint",
+                hint_triggered=True,
+                hint_reason="Manually created by instructor",
+                hint_text=params.hint_text,
+                hint_approval_status=models.HintApprovalStatus.APPROVED,
+            )
+            self.__user_service.add_trajectory_entry(s_id, trajectory)

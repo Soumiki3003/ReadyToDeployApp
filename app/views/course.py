@@ -238,6 +238,26 @@ def get_hints(
     )
 
 
+@app.route("/course/<course_id>/hints/manual", methods=["POST"])
+@roles_required("instructor")
+@validate()
+@inject
+def create_manual_hint(
+    course_id: str,
+    form: schemas.CreateManualHint,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    """Manually create a hint for a student or all students."""
+    try:
+        course_controller.create_manual_hint(course_id, form)
+        return {"success": True}, 201
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 @app.route("/course/<course_id>/hints/<trajectory_id>", methods=["PUT"])
 @roles_required("instructor")
 @validate()
@@ -341,7 +361,9 @@ def upload_to_course(
         return {"error": "No files provided"}, 400
 
     try:
-        course_controller.upload_to_course(course_id, files)
-        return {"success": True}, 200
+        processed = course_controller.upload_to_course(course_id, files)
+        return {"success": True, "processed": processed}, 200
+    except ValueError as e:
+        return {"error": str(e)}, 400
     except Exception as e:
         return {"error": str(e)}, 500
