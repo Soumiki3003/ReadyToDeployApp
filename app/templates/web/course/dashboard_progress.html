@@ -1,0 +1,256 @@
+{% extends "base_app.html" %}
+{% block title %}Student Progress - {{ course.name }} - KnowledgeGraph{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+    .chart-container {
+        position: relative;
+        width: 100%;
+        min-height: 300px;
+    }
+    .bar-cursor canvas { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<div class="breadcrumbs text-sm">
+    <ul>
+        <li><a href="{{ url_for('course.dashboard') }}">Courses</a></li>
+        <li>{{ course.name }}</li>
+        <li>Student Progress</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">{{ course.name }} — Student Progress</h1>
+</div>
+
+<!-- Navigation Buttons -->
+<div class="flex flex-wrap gap-2 mb-6">
+    <a href="{{ url_for('course.settings', course_id=course_id) }}#upload" class="btn btn-sm btn-outline btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        </svg>
+        Upload PDF / HTML
+    </a>
+    <a href="{{ url_for('course.settings', course_id=course_id) }}#graph" class="btn btn-sm btn-outline btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+        </svg>
+        Knowledge Graph
+    </a>
+    <a href="{{ url_for('course.dashboard_progress', course_id=course_id) }}" class="btn btn-sm btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        Student Progress
+    </a>
+</div>
+
+<!-- Charts Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Node-Level Struggle Chart -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <h2 class="card-title text-lg">
+                Node-Level Struggle
+                <span class="badge badge-outline badge-sm">0-9 scale</span>
+            </h2>
+            <p class="text-sm text-base-content/60 mb-2">Average struggle per Knowledge Graph topic. Click a bar for details.</p>
+            <div class="chart-container bar-cursor" id="node-chart-container">
+                <canvas id="nodeStruggleChart"></canvas>
+            </div>
+            <div id="node-chart-empty" class="hidden text-center py-8 text-base-content/50">
+                No node struggle data available yet.
+            </div>
+        </div>
+    </div>
+
+    <!-- Student-Level Struggle Chart -->
+    <div class="card bg-base-100 shadow-md">
+        <div class="card-body">
+            <h2 class="card-title text-lg">
+                Student-Level Struggle
+                <span class="badge badge-outline badge-sm">6-16 scale</span>
+            </h2>
+            <p class="text-sm text-base-content/60 mb-2">Cumulative struggle per student. Click a bar for details.</p>
+            <div class="chart-container bar-cursor" id="student-chart-container">
+                <canvas id="studentStruggleChart"></canvas>
+            </div>
+            <div id="student-chart-empty" class="hidden text-center py-8 text-base-content/50">
+                No student struggle data available yet.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Drill-Down Detail Panel (loaded via HTMX) -->
+<div id="drilldown-panel" class="card bg-base-100 shadow-md mb-6 hidden">
+    <div class="card-body">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="card-title text-lg" id="drilldown-title">Detail</h2>
+            <button class="btn btn-ghost btn-sm btn-circle" onclick="hideDrilldown()">✕</button>
+        </div>
+        <div id="drilldown-content">
+            <div class="flex justify-center py-6">
+                <span class="loading loading-spinner loading-md"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const courseId = "{{ course_id }}";
+
+/* Helpers */
+function hideDrilldown() {
+    document.getElementById('drilldown-panel').classList.add('hidden');
+}
+
+function showDrilldown(title, url) {
+    const panel = document.getElementById('drilldown-panel');
+    const titleEl = document.getElementById('drilldown-title');
+    const contentEl = document.getElementById('drilldown-content');
+    titleEl.textContent = title;
+    contentEl.innerHTML = '<div class="flex justify-center py-6"><span class="loading loading-spinner loading-md"></span></div>';
+    panel.classList.remove('hidden');
+    htmx.ajax('GET', url, { target: '#drilldown-content', swap: 'innerHTML' });
+}
+
+/* Palette */
+const COLORS = [
+    'rgba(99, 102, 241, 0.75)',
+    'rgba(59, 130, 246, 0.75)',
+    'rgba(16, 185, 129, 0.75)',
+    'rgba(245, 158, 11, 0.75)',
+    'rgba(239, 68, 68, 0.75)',
+    'rgba(168, 85, 247, 0.75)',
+    'rgba(236, 72, 153, 0.75)',
+    'rgba(20, 184, 166, 0.75)',
+];
+
+/* Node Struggle Chart */
+let nodeChart = null;
+async function loadNodeChart() {
+    try {
+        const resp = await fetch('/course/' + courseId + '/api/node-struggle');
+        const data = await resp.json();
+        if (!data.length) {
+            document.getElementById('node-chart-container').classList.add('hidden');
+            document.getElementById('node-chart-empty').classList.remove('hidden');
+            return;
+        }
+        const labels = data.map(function(d) { return d.node_name; });
+        const values = data.map(function(d) { return d.struggle; });
+        const nodeIds = data.map(function(d) { return d.node_id; });
+        if (nodeChart) nodeChart.destroy();
+        var ctx = document.getElementById('nodeStruggleChart').getContext('2d');
+        nodeChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Struggle Score',
+                    data: values,
+                    backgroundColor: values.map(function(_, i) { return COLORS[i % COLORS.length]; }),
+                    borderColor: values.map(function(_, i) { return COLORS[i % COLORS.length].replace('0.75', '1'); }),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                onClick: function(evt, elements) {
+                    if (elements.length) {
+                        var idx = elements[0].index;
+                        var nid = nodeIds[idx];
+                        var name = labels[idx];
+                        showDrilldown(
+                            'Students struggling with "' + name + '"',
+                            '/course/' + courseId + '/api/struggle-detail/node/' + encodeURIComponent(nid)
+                        );
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) { return 'Struggle: ' + ctx.parsed.x.toFixed(2); } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, title: { display: true, text: 'Struggle Score (0-9)' }, max: Math.max.apply(null, values) * 1.2 || 10 },
+                    y: { ticks: { font: { size: 11 } } }
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Failed to load node struggle data:', err);
+    }
+}
+
+/* Student Struggle Chart */
+let studentChart = null;
+async function loadStudentChart() {
+    try {
+        const resp = await fetch('/course/' + courseId + '/api/student-struggle');
+        const data = await resp.json();
+        if (!data.length) {
+            document.getElementById('student-chart-container').classList.add('hidden');
+            document.getElementById('student-chart-empty').classList.remove('hidden');
+            return;
+        }
+        const labels = data.map(function(d) { return d.student_name; });
+        const values = data.map(function(d) { return d.struggle; });
+        const studentIds = data.map(function(d) { return d.student_id; });
+        if (studentChart) studentChart.destroy();
+        var ctx = document.getElementById('studentStruggleChart').getContext('2d');
+        studentChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Struggle Score',
+                    data: values,
+                    backgroundColor: values.map(function(_, i) { return COLORS[(i + 3) % COLORS.length]; }),
+                    borderColor: values.map(function(_, i) { return COLORS[(i + 3) % COLORS.length].replace('0.75', '1'); }),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: function(evt, elements) {
+                    if (elements.length) {
+                        var idx = elements[0].index;
+                        var sid = studentIds[idx];
+                        var name = labels[idx];
+                        showDrilldown(
+                            'Topics "' + name + '" struggles with',
+                            '/course/' + courseId + '/api/struggle-detail/student/' + encodeURIComponent(sid)
+                        );
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) { return 'Struggle: ' + ctx.parsed.y.toFixed(2); } } }
+                },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Struggle Score (6-16)' }, max: Math.max.apply(null, values) * 1.2 || 20 },
+                    x: { ticks: { font: { size: 11 } } }
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Failed to load student struggle data:', err);
+    }
+}
+
+/* Init */
+loadNodeChart();
+loadStudentChart();
+</script>
+{% endblock %}

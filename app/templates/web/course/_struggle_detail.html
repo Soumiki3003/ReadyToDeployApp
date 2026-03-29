@@ -1,0 +1,62 @@
+{% if detail_type == "node" %}
+    {% if rows %}
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Struggle Score</th>
+                    <th>Chat Logs</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="font-medium">{{ row.student_name }}</td>
+                    <td>
+                        <span class="badge badge-sm {{ 'badge-error' if row.struggle > 5 else ('badge-warning' if row.struggle > 2 else 'badge-success') }}">
+                            {{ row.struggle }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('course.chat', course_id=course_id) }}?student={{ row.student_id }}" class="btn btn-xs btn-ghost">
+                            View Chat
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-center text-base-content/50 py-4">No student data found for this node.</p>
+    {% endif %}
+{% elif detail_type == "student" %}
+    <p class="text-sm text-base-content/60 mb-3">Showing topics that <strong>{{ student_name }}</strong> struggles with:</p>
+    {% if rows %}
+    <div class="overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Topic / Node</th>
+                    <th>Struggle Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="font-medium">{{ row.node_name }}</td>
+                    <td>
+                        <span class="badge badge-sm {{ 'badge-error' if row.struggle > 5 else ('badge-warning' if row.struggle > 2 else 'badge-success') }}">
+                            {{ row.struggle }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-center text-base-content/50 py-4">No topic data found for this student.</p>
+    {% endif %}
+{% endif %}
