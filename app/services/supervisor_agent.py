@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 from neo4j_graphrag.generation import GraphRAG
 from neo4j_graphrag.types import LLMMessage
@@ -12,8 +12,7 @@ from app import models
 from .user import UserService
 
 
-@dataclass
-class SupervisorResult:
+class SupervisorResult(BaseModel):
     answer: str
     hint_text: str | None = None
     hint_reason: str | None = None
@@ -33,6 +32,7 @@ class SupervisorAgentService:
         similarity_threshold: float = 0.85,
         hint_by_similarity_threshold: int = 2,
         hint_procedural_history_limit: int = 3,
+        confidence_threshold: float = 0.6,
         procedural_keywords: list[str] = [
             "run",
             "fix",
@@ -55,6 +55,7 @@ class SupervisorAgentService:
         self.__hint_by_similarity_threshold = hint_by_similarity_threshold
         self.__hint_procedural_history_limit = hint_procedural_history_limit
         self.__procedural_keywords = procedural_keywords
+        self.__confidence_threshold = confidence_threshold
         self.__logger = logging.getLogger(__name__)
 
     def __retrieve_node_metadata(
@@ -211,6 +212,21 @@ class SupervisorAgentService:
                 self.__retrieve_node_metadata(query, message_history)
             )
             node_entry_count = len(retrieved_nodes)
+
+            # Check confidence threshold
+            if (
+                scores
+                and scores[0] is not None
+                and scores[0] < self.__confidence_threshold
+            ):
+                self.__logger.warning(
+                    f"Low confidence query (score={scores[0]:.2f} < {self.__confidence_threshold:.2f}): {query}"
+                )
+                return SupervisorResult(
+                    answer=self.RESPONSE_FALLBACK,
+                    hint_text=None,
+                    hint_reason=None,
+                )
 
             self.__logger.info("Determining interaction type...")
             interaction_type = self.__get_interaction_type(query)
