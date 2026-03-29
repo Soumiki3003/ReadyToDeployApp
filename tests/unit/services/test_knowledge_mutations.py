@@ -19,7 +19,8 @@ def knowledge_service(mock_neo4j_session_factory):
         file_service=file_service,
         upload_service=upload_service,
         static_folder=Path("/tmp"),
-        template_env=template_env
+        template_env=template_env,
+        embedder=MagicMock(),
     )
 
 def test_update_node(knowledge_service, mock_neo4j_session_factory):

@@ -9,7 +9,7 @@ from pdf2image import convert_from_path
 from PIL import Image
 from pptx import Presentation
 
-from app import schemas
+from app import models, schemas
 
 
 class FileService:
@@ -192,3 +192,54 @@ class FileService:
             f"Visual extraction complete. Total entries: {len(visual_text)}"
         )
         return visual_text
+
+    def chunk_textual_content(
+        self,
+        textual_contents: list[schemas.TextualContent],
+        *,
+        source_file: str,
+        course_id: str,
+    ) -> list[models.ContentChunk]:
+        self.__logger.info(f"Chunking {len(textual_contents)} textual content entries")
+        chunk_index = 0
+        chunks: list[models.ContentChunk] = []
+
+        for entry in textual_contents:
+            if isinstance(entry, schemas.PaginatedTextualContent):
+                page = entry.page
+            elif isinstance(entry, schemas.SlideTextualContent):
+                page = entry.slide
+            else:
+                page = 0
+
+            # Page-level chunk (full text of the page/slide/section)
+            chunks.append(
+                models.ContentChunk(
+                    content=entry.text,
+                    page=page,
+                    source_file=source_file,
+                    chunk_index=chunk_index,
+                    course_id=course_id,
+                    chunk_type=models.ContentChunkType.PAGE,
+                )
+            )
+            chunk_index += 1
+
+            # Paragraph-level chunks (only if >1 non-empty paragraph)
+            paragraphs = [p.strip() for p in entry.text.split("\n\n") if p.strip()]
+            if len(paragraphs) > 1:
+                for paragraph in paragraphs:
+                    chunks.append(
+                        models.ContentChunk(
+                            content=paragraph,
+                            page=page,
+                            source_file=source_file,
+                            chunk_index=chunk_index,
+                            course_id=course_id,
+                            chunk_type=models.ContentChunkType.PARAGRAPH,
+                        )
+                    )
+                    chunk_index += 1
+
+        self.__logger.info(f"Chunking complete. Total chunks: {len(chunks)}")
+        return chunks

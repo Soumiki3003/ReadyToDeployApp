@@ -306,6 +306,21 @@ Knowledge = (
 )
 
 
+class ContentChunkType(StrEnum):
+    PAGE = "page"
+    PARAGRAPH = "paragraph"
+
+
+class ContentChunk(BaseModel):
+    id: str = Field(default_factory=utils.uuid4_hex)
+    content: str = Field(min_length=1)
+    page: int = Field(ge=0)
+    source_file: str
+    chunk_index: int = Field(ge=0)
+    course_id: str
+    chunk_type: ContentChunkType = Field(default=ContentChunkType.PARAGRAPH)
+
+
 class KnowledgeUploadStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"

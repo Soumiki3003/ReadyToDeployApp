@@ -140,6 +140,21 @@ class Gateways(containers.DeclarativeContainer):
         ),
     )
 
+    content_chunk_graphrag = providers.Resource(
+        gateways.neo4j_graphrag,
+        params=providers.Factory(
+            gateways.Neo4jGraphRAGParams,
+            driver=neo4j_driver,
+            llm=neo4j_agent,
+            embedder=neo4j_embedder,
+            vector_index=providers.Factory(
+                gateways.Neo4jGraphRAGVectorIndexParams,
+                name=config.rag.indexes.content_chunk.vector.name.required(),
+                label=config.rag.indexes.content_chunk.vector.label.required(),
+            ),
+        ),
+    )
+
 
 class Services(containers.DeclarativeContainer):
     config = providers.Configuration()
@@ -159,6 +174,7 @@ class Services(containers.DeclarativeContainer):
         file_service=file,
         upload_service=knowledge_upload,
         static_folder=core.static_folder,
+        embedder=ai.default_embedder,
     )
     user = providers.Factory(
         services.UserService,

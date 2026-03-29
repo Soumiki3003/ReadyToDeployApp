@@ -89,6 +89,9 @@ class KnowledgeService:
     __teaches_rel_type = "TEACHES"
     __enrolled_rel_type = "ENROLLED_IN"
     __user_node_name = "User"
+    __content_rel_type = "HAS_CONTENT"
+    __content_chunk_label = "ContentChunk"
+    __chunk_vector_field = "chunk_vector"
 
     def __init__(
         self,
@@ -99,6 +102,7 @@ class KnowledgeService:
         upload_service: KnowledgeUploadService,
         static_folder: Path,
         template_env: jinja2.Environment,
+        embedder: pydantic_ai.Embedder,
         batch_size: int = 20,
     ):
         self.__agent = agent
@@ -108,6 +112,7 @@ class KnowledgeService:
         self.__static_folder = static_folder
         self.__logger = logging.getLogger(__name__)
         self.__template_env = template_env
+        self.__embedder = embedder
         self.__batch_size = batch_size
 
     def get_knowledge(self, knowledge_id: str) -> models.Knowledge:
@@ -299,7 +304,7 @@ class KnowledgeService:
         self,
         upload_id: str,
         file_path: Path,
-    ):
+    ) -> tuple[models.RootKnowledge, list[schemas.TextualContent]]:
         self.__logger.debug("Extracting textual content...")
         textual = self.__file_service.extract_textual_content(file_path)
         self.__logger.debug(f"Extracted {len(textual)} textual content entries")
@@ -335,12 +340,12 @@ class KnowledgeService:
                 f"Processing pages {page_nums[0]}-{page_nums[-1]} complete."
             )
 
-        return root_knowledge
+        return root_knowledge, textual
 
     def create_knowledge_from_file(self, file_path: Path) -> str:
         self.__logger.info(f"Starting knowledge creation from file: {file_path.name}")
         upload_id = self.__upload_service.create(file_path)
-        root_knowledge = self.__process_pages_batch(upload_id, file_path)
+        root_knowledge, textual = self.__process_pages_batch(upload_id, file_path)
 
         try:
             self.__logger.info("Processing all pages complete.")
@@ -350,6 +355,22 @@ class KnowledgeService:
 
             self.__logger.info("Creating knowledge graph in Neo4j...")
             knowledge_id = self.create_knowledge(root_knowledge)
+
+            chunks = self.__file_service.chunk_textual_content(
+                textual,
+                source_file=relative_path,
+                course_id=knowledge_id,
+            )
+            with self.__session_factory() as session:
+                tx = session.begin_transaction()
+                try:
+                    self.__store_content_chunks(chunks, knowledge_id, tx=tx)
+                except Exception:
+                    tx.rollback()
+                    raise
+                else:
+                    tx.commit()
+
             self.__logger.info(
                 f"Knowledge graph created successfully with ID: {knowledge_id}"
             )
@@ -392,10 +413,16 @@ class KnowledgeService:
     def add_document_to_course(self, course_id: str, file_path: Path) -> str:
         self.__logger.info(f"Adding document {file_path.name} to course {course_id}")
         upload_id = self.__upload_service.create(file_path)
-        new_root = self.__process_pages_batch(upload_id, file_path)
+        new_root, textual = self.__process_pages_batch(upload_id, file_path)
 
         try:
             relative_path = file_path.relative_to(self.__static_folder).as_posix()
+
+            chunks = self.__file_service.chunk_textual_content(
+                textual,
+                source_file=relative_path,
+                course_id=course_id,
+            )
 
             def merge_txn(tx):
                 # Verify root exists
@@ -423,6 +450,9 @@ class KnowledgeService:
                     root_type=models.KnowledgeType.ROOT.value,
                     source=relative_path,
                 )
+
+                # Store content chunks with embeddings
+                self.__store_content_chunks(chunks, course_id, tx=tx)
 
             with self.__session_factory() as session:
                 session.execute_write(merge_txn)
@@ -653,6 +683,42 @@ class KnowledgeService:
         )
 
         return new_parent
+
+    def __store_content_chunks(
+        self,
+        chunks: list[models.ContentChunk],
+        course_id: str,
+        *,
+        tx: Transaction,
+    ) -> None:
+        if not chunks:
+            return
+
+        texts = [c.content for c in chunks]
+        try:
+            vectors = self.__embedder.embed_documents_sync(texts)
+        except Exception as e:
+            self.__logger.warning(f"Chunk embedding failed, using zero vectors: {e}")
+            vectors = [[0.0] * 384 for _ in texts]
+
+        for chunk, vector in zip(chunks, vectors):
+            props = chunk.model_dump(mode="json")
+            props[self.__chunk_vector_field] = vector
+            query = (
+                f"MATCH (root {{id: $course_id, type: $root_type}}) "
+                f"CREATE (c:{self.__content_chunk_label} $props) "
+                f"CREATE (root)-[:{self.__content_rel_type}]->(c)"
+            )
+            tx.run(
+                query,
+                course_id=course_id,
+                root_type=models.KnowledgeType.ROOT.value,
+                props=props,
+            )
+
+        self.__logger.info(
+            f"Stored {len(chunks)} content chunks for course {course_id}"
+        )
 
     def __get_all_ids_recursive(self, node: models.Knowledge) -> list[str]:
         ids = [node.id]

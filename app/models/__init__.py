@@ -2,6 +2,8 @@ from .knowledge import (
     AssessmentKnowledge,
     ConceptualKnowledge,
     ConceptualKnowledgeConnection,
+    ContentChunk,
+    ContentChunkType,
     Knowledge,
     KnowledgeAssessmentBloomLevel,
     KnowledgeConceptualBloomLevel,
@@ -22,6 +24,8 @@ from .user import User, UserRole, UserTrajectory, HintApprovalStatus
 __all__ = [
     "ChatMessage",
     "ChatMessageRole",
+    "ContentChunk",
+    "ContentChunkType",
     "User",
     "UserRole",
     "UserTrajectory",
