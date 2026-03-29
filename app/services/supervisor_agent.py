@@ -21,6 +21,46 @@ class SupervisorResult(BaseModel):
 class SupervisorAgentService:
     RESPONSE_FALLBACK = "I couldn't find relevant information to answer your question. Please try rephrasing."
 
+    INTENT_KEYWORDS = {
+        "definition": [
+            "what is",
+            "what are",
+            "explain",
+            "define",
+            "definition",
+            "meaning of",
+            "describe",
+        ],
+        "procedural": [
+            "how to",
+            "how do",
+            "steps to",
+            "implement",
+            "procedure",
+            "how can i",
+            "what steps",
+        ],
+        "troubleshooting": [
+            "error in",
+            "not working",
+            "fix",
+            "bug",
+            "issue",
+            "broken",
+            "fails",
+            "exception",
+            "debug",
+        ],
+        "example_request": [
+            "example of",
+            "show me",
+            "example",
+            "sample",
+            "demo",
+            "give me an example",
+        ],
+    }
+
     def __init__(
         self,
         *,
@@ -92,6 +132,17 @@ class SupervisorAgentService:
 
         self.__logger.info(f"Retrieved nodes: {len(retrieved_nodes)}")
         return result, retrieved_nodes, scores, response_time_sec
+
+    def __classify_intent(self, query: str) -> str:
+        """Classify student query intent into categories.
+
+        Returns one of: definition, procedural, troubleshooting, example_request, or context_request.
+        """
+        q_lower = query.lower().strip()
+        for intent, keywords in self.INTENT_KEYWORDS.items():
+            if any(kw in q_lower for kw in keywords):
+                return intent
+        return "context_request"
 
     def __get_interaction_type(self, query: str):
         q_lower = query.lower()
@@ -229,7 +280,7 @@ class SupervisorAgentService:
                 )
 
             self.__logger.info("Determining interaction type...")
-            interaction_type = self.__get_interaction_type(query)
+            interaction_type = self.__classify_intent(query)
 
             self.__logger.info("Computing node count and repeat count...")
             similar_trajectory_ids = self.__get_similar_trajectory_queries(
