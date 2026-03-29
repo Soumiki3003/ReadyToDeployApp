@@ -179,6 +179,10 @@ class Services(containers.DeclarativeContainer):
         graph_rag=gateways.trajectory_graphrag,
         hint_agent=ai.default_agent,
     )
+    dashboard = providers.Factory(
+        services.DashboardService,
+        session_factory=gateways.neo4j_session.provider,
+    )
 
 
 class Controllers(containers.DeclarativeContainer):

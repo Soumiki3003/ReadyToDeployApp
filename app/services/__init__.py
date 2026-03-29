@@ -1,4 +1,5 @@
 from .auth import AuthService
+from .dashboard import DashboardService
 from .chat import ChatService
 from .file import FileService
 from .knowledge import KnowledgeService, KnowledgeUploadService
@@ -10,6 +11,7 @@ __all__ = [
     "KnowledgeUploadService",
     "AuthService",
     "ChatService",
+    "DashboardService",
     "UserService",
     "FileService",
     "SupervisorAgentService",
