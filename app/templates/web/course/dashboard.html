@@ -1,0 +1,215 @@
+{% extends "base_app.html" %}
+{% block title %}Dashboard - KnowledgeGraph{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">My Courses</h1>
+    {% if current_user.role == "instructor" %}
+    <button class="btn btn-primary" onclick="create_course_modal.showModal()">
+        + New Course
+    </button>
+    {% endif %}
+</div>
+
+{% if courses %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for course in courses %}
+    <div class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+        <div class="card-body">
+            <h2 class="card-title">{{ course.name or 'Untitled Course' }}</h2>
+            {% if course.description %}
+            <p class="text-sm text-base-content/70">{{ course.description }}</p>
+            {% endif %}
+            {% if course.sources %}
+            <div class="flex flex-wrap gap-1 mt-2">
+                {% for src in course.sources[:3] %}
+                <span class="badge badge-outline badge-sm">{{ src }}</span>
+                {% endfor %}
+                {% if course.sources|length > 3 %}
+                <span class="badge badge-outline badge-sm">+{{ course.sources|length - 3 }} more</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            <div class="card-actions justify-end mt-4">
+                <a href="{{ url_for('course.chat', course_id=course.id) }}" class="btn btn-sm btn-primary">
+                    Chat
+                </a>
+                {% if current_user.role == "instructor" %}
+                <a href="{{ url_for('course.settings', course_id=course.id) }}" class="btn btn-sm btn-outline">
+                    Settings
+                </a>
+                <a 
+                    href="{{ url_for('course.settings', course_id=course.id) }}#upload"
+                    class="btn btn-sm btn-secondary"
+                    title="Upload materials to this course"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Upload
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+<div class="flex justify-center mt-8">
+    <div class="join">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&page_size={{ page_size }}" class="join-item btn btn-sm">Previous</a>
+        {% endif %}
+        <button class="join-item btn btn-sm btn-active">Page {{ page }}</button>
+        {% if has_next %}
+        <a href="?page={{ page + 1 }}&page_size={{ page_size }}" class="join-item btn btn-sm">Next</a>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="hero min-h-[50vh]">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h2 class="text-2xl font-bold mb-4">No courses yet</h2>
+            <p class="text-base-content/70 mb-6">
+                {% if current_user.role == "instructor" %}
+                Create your first course to get started.
+                {% else %}
+                No courses are available yet. Check back later!
+                {% endif %}
+            </p>
+            {% if current_user.role == "instructor" %}
+            <button class="btn btn-primary" onclick="create_course_modal.showModal()">
+                Create Course
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if current_user.role == "instructor" %}
+<!-- Create Course Modal -->
+<dialog id="create_course_modal" class="modal">
+    <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-2xl mb-4">Create New Course</h3>
+        <form id="create-course-form">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Course Name</span>
+                </label>
+                <input
+                    type="text"
+                    id="create-course-name"
+                    placeholder="e.g. Introduction to Cybersecurity"
+                    class="input input-bordered"
+                    required
+                />
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Description (optional)</span>
+                </label>
+                <textarea
+                    id="create-course-description"
+                    placeholder="Brief description of the course..."
+                    class="textarea textarea-bordered"
+                    rows="3"
+                ></textarea>
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Instructors</span>
+                </label>
+                <div class="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg border-base-300">
+                    {% for instructor in all_instructors %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm create-instructor-cb"
+                            value="{{ instructor.id }}"
+                            {{ 'checked' if instructor.id == current_user.id }}
+                        />
+                        <span class="text-sm">{{ instructor.name }} ({{ instructor.email }})</span>
+                        {% if instructor.id == current_user.id %}
+                        <span class="badge badge-xs badge-primary">You</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-control mt-4">
+                <label class="label">
+                    <span class="label-text">Students</span>
+                </label>
+                <div class="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg border-base-300">
+                    {% if all_students %}
+                    {% for student in all_students %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm create-student-cb"
+                            value="{{ student.id }}"
+                        />
+                        <span class="text-sm">{{ student.name }} ({{ student.email }})</span>
+                    </label>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-sm text-base-content/50">No students registered yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="create_course_modal.close()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="create-course-submit">
+                    <span class="loading loading-spinner loading-xs hidden" id="create-course-spinner"></span>
+                    Create
+                </button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+    document.getElementById("create-course-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const spinner = document.getElementById("create-course-spinner");
+        const btn = document.getElementById("create-course-submit");
+        spinner.classList.remove("hidden");
+        btn.disabled = true;
+
+        const instructorIds = Array.from(document.querySelectorAll(".create-instructor-cb:checked")).map(cb => cb.value);
+        const studentIds = Array.from(document.querySelectorAll(".create-student-cb:checked")).map(cb => cb.value);
+
+        try {
+            const resp = await fetch("{{ url_for('course.create_course') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: document.getElementById("create-course-name").value,
+                    description: document.getElementById("create-course-description").value || null,
+                    instructor_ids: instructorIds,
+                    student_ids: studentIds,
+                }),
+            });
+            if (resp.ok) {
+                create_course_modal.close();
+                window.location.reload();
+            }
+        } finally {
+            spinner.classList.add("hidden");
+            btn.disabled = false;
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

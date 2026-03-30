@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Login - KnowledgeGraph{% endblock %}
+{% block content %}
+<div class="hero min-h-screen">
+    <div class="card w-96 bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-2xl justify-center mb-4">Sign In</h2>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'error' if category == 'error' else 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.login_submit') }}" method="post">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email</span>
+                    </label>
+                    <input
+                        type="email"
+                        name="email"
+                        placeholder="you@example.com"
+                        class="input input-bordered"
+                        required
+                    />
+                </div>
+
+                <div class="form-control mt-2">
+                    <label class="label">
+                        <span class="label-text">Password</span>
+                    </label>
+                    <input
+                        type="password"
+                        name="password"
+                        placeholder="Password"
+                        class="input input-bordered"
+                        required
+                    />
+                </div>
+
+                <div class="card-actions justify-center mt-6">
+                    <button type="submit" class="btn btn-primary w-full">
+                        Sign In
+                    </button>
+                </div>
+            </form>
+
+            <div class="divider">OR</div>
+
+            <a href="{{ url_for('auth.register_page') }}" class="btn btn-outline btn-sm w-full">
+                Create an account
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% if hint %}
+{#
+  Single-hint card with prev / next navigation.
+  Variables expected from the view:
+    hint   – UserTrajectory (the current hint)
+    index  – 0-based position in the list
+    total  – total number of active hints
+    course_id – used for URL generation
+#}
+<div
+    id="hint-card"
+    hx-post="{{ url_for('course.mark_hint_read', course_id=course_id, trajectory_id=hint.id) }}"
+    hx-trigger="load"
+    hx-swap="none"
+>
+    <!-- Progress indicator -->
+    <div class="flex items-center justify-between text-xs text-base-content/50 mb-3">
+        <span class="font-medium">{{ index + 1 }} / {{ total }}</span>
+        <span>{{ hint.timestamp.strftime('%b %d, %H:%M') if hint.timestamp else '' }}</span>
+    </div>
+
+    <!-- Hint content -->
+    <div class="alert bg-warning/10 border border-warning/30 text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-warning flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+        <p>{{ hint.hint_text }}</p>
+    </div>
+
+    {% if hint.hint_reason %}
+    <p class="text-xs text-base-content/40 mt-2 pl-1">
+        <span class="font-medium">Why this hint?</span> {{ hint.hint_reason }}
+    </p>
+    {% endif %}
+
+    <!-- Pagination controls -->
+    <div class="flex justify-between items-center mt-5">
+        {% if index > 0 %}
+        <button
+            class="btn btn-sm btn-ghost gap-1"
+            hx-get="{{ url_for('course.student_hints', course_id=course_id) }}?index={{ index - 1 }}"
+            hx-target="#hint-modal-body"
+            hx-swap="innerHTML"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Previous
+        </button>
+        {% else %}
+        <span></span>
+        {% endif %}
+
+        {% if index + 1 < total %}
+        <button
+            class="btn btn-sm btn-warning gap-1"
+            hx-get="{{ url_for('course.student_hints', course_id=course_id) }}?index={{ index + 1 }}"
+            hx-target="#hint-modal-body"
+            hx-swap="innerHTML"
+        >
+            Next
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<!-- Empty state -->
+<div class="text-center py-8 text-base-content/50">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+    <p class="font-medium">No hints right now</p>
+    <p class="text-xs mt-1">Your instructor hasn't sent any hints yet — keep going!</p>
+</div>
+{% endif %}

@@ -1,0 +1,75 @@
+{% if uploads %}
+<table class="table table-zebra">
+    <thead>
+        <tr>
+            <th>Filename</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Updated</th>
+            <th>Knowledge ID</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for upload in uploads %}
+        <tr>
+            <td class="font-medium">{{ upload.filename }}</td>
+            <td>
+                {% if upload.status == 'completed' %}
+                <div class="badge badge-success gap-2">Completed</div>
+                {% elif upload.status == 'processing' %}
+                <div class="badge badge-info gap-2">
+                    <span class="loading loading-spinner loading-xs"></span>
+                    Processing
+                </div>
+                {% elif upload.status == 'failed' %}
+                <div class="badge badge-error gap-2">Failed</div>
+                {% else %}
+                <div class="badge badge-warning gap-2">Pending</div>
+                {% endif %}
+            </td>
+            <td class="text-sm">
+                {{ upload.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </td>
+            <td class="text-sm">
+                {{ upload.updated_at.strftime('%Y-%m-%d %H:%M:%S') if
+                upload.updated_at else '-' }}
+            </td>
+            <td>
+                {% if upload.knowledge_id %}
+                <code class="text-xs">{{ upload.knowledge_id[:8] }}...</code>
+                {% else %} - {% endif %}
+            </td>
+            <td>
+                {% if upload.knowledge_id %}
+                <button
+                    class="btn btn-xs btn-primary"
+                    onclick="document.querySelector('#settings-tabs .tab[data-tab=&quot;graph&quot;]').click()"
+                    >View Graph</button
+                >
+                {% else %}
+                <span class="text-xs opacity-50">Waiting</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% if upload.error_message %}
+        <tr>
+            <td colspan="6" class="bg-error/10">
+                <div class="alert alert-error">
+                    <span>{{ upload.error_message }}</span>
+                </div>
+            </td>
+        </tr>
+        {% endif %} {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="hero h-64">
+    <div class="hero-content text-center">
+        <div>
+            <p class="text-lg font-medium opacity-50">No uploads yet</p>
+            <p class="text-sm opacity-50">Click "New Upload" to get started</p>
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,81 @@
+{% for trajectory, user_name in hints %}
+<div class="card bg-base-100 shadow-sm border border-warning/30" id="hint-{{ trajectory.id }}">
+    <div class="card-body p-4">
+        <div class="flex items-start gap-4">
+            <!-- Info column -->
+            <div class="flex-1 min-w-0 space-y-2">
+                <!-- Badges row -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="badge badge-warning badge-sm">Pending</span>
+                    <span class="text-xs text-base-content/50">
+                        {{ trajectory.timestamp.strftime('%Y-%m-%d %H:%M') if trajectory.timestamp else '' }}
+                    </span>
+                    <span class="badge badge-outline badge-xs">{{ trajectory.hint_reason }}</span>
+                </div>
+
+                <!-- Student & question -->
+                <p class="text-sm">
+                    <span class="text-base-content/60 font-medium">Student:</span> {{ user_name }}
+                </p>
+                <p class="text-sm">
+                    <span class="text-base-content/60 font-medium">Question:</span>
+                    <span class="italic">{{ trajectory.query }}</span>
+                </p>
+
+                <!-- Editable hint text -->
+                <div>
+                    <label class="text-xs text-base-content/60 font-medium flex items-center gap-1 mb-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Hint text
+                        <span class="font-normal text-base-content/40">(edit before approving)</span>
+                    </label>
+                    <textarea
+                        id="hint-text-{{ trajectory.id }}"
+                        name="hint_text"
+                        rows="3"
+                        class="textarea textarea-bordered textarea-sm w-full text-sm bg-warning/5 border-warning/30 focus:border-warning resize-y"
+                    >{{ trajectory.hint_text }}</textarea>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex flex-col gap-2 shrink-0 pt-1">
+                <button
+                    class="btn btn-success btn-sm"
+                    hx-put="{{ url_for('course.update_hint', course_id=course_id, trajectory_id=trajectory.id) }}"
+                    hx-vals='{"status": "approved"}'
+                    hx-include="#hint-text-{{ trajectory.id }}"
+                    hx-target="#hint-{{ trajectory.id }}"
+                    hx-swap="outerHTML"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Approve
+                </button>
+                <button
+                    class="btn btn-error btn-sm btn-outline"
+                    hx-put="{{ url_for('course.update_hint', course_id=course_id, trajectory_id=trajectory.id) }}"
+                    hx-vals='{"status": "rejected"}'
+                    hx-target="#hint-{{ trajectory.id }}"
+                    hx-swap="outerHTML"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Reject
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-8 text-base-content/40" id="hints-empty">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+    <p class="text-sm">No pending hints</p>
+</div>
+{% endfor %}

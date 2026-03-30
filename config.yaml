@@ -1,0 +1,53 @@
+core:
+  logging:
+    version: 1
+    formatters:
+      standard:
+        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: standard
+        level: ${LOG_LEVEL:DEBUG}
+    root:
+      handlers:
+        - console
+      level: ${LOG_LEVEL:DEBUG}
+
+  uploads:
+    allowed_extensions: ${ALLOWED_EXTENSIONS:pdf,pptx,html}
+
+ai:
+  agents:
+    default:
+      model: ${DEFAULT_MODEL:ollama:gpt-oss:20b}
+    knowledge_file:
+      model: ${KNOWLEDGE_FILE_MODEL:ollama:gpt-oss:20b}
+    graph:
+      model: ${GRAPH_MODEL:ollama:gpt-oss:20b}
+  embedder:
+    default:
+      model: ${EMBEDDER_MODEL:ollama:qwen3-embedding:8b}
+
+gateways:
+  rag:
+    indexes:
+      trajectory:
+        vector:
+          name: "index_trajectory_query_vector"
+          label: "trajectory_vector"
+        text:
+          name: "index_trajectory_query_text"
+          label: "trajectory_text"
+          fields:
+            - "query"
+            - "interaction_type"
+
+  neo4j:
+    uri: ${NEO4J_URI:neo4j://127.0.0.1:7687}
+    user: ${NEO4J_USER:neo4j}
+    password: ${NEO4J_PASS:password}
+
+flask:
+  secret_key: ${SECRET_KEY:dev-secret}
+  debug: ${FLASK_DEBUG:true}

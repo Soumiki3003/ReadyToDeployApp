@@ -1,0 +1,312 @@
+## Processing Context
+
+**Document:** {{ source_filename }}
+**Total Pages:** {{ total_pages }}
+**Processing Mode:** Incremental page-by-page construction
+
+{% for page in page_list %}
+---
+
+## Page {{ page.num }} - Extracted Content
+
+### Textual Content:
+```
+{{ page.text }}
+```
+
+### Visual Content (OCR/Diagrams):
+```
+{{ page.visual }}
+```
+
+---
+{% endfor %}
+
+---
+
+## Cumulative Knowledge Graph (from previous pages):
+
+```json
+{{ root_knowledge | tojson(indent=2) }}
+```
+
+---
+
+## Processing Instructions for each Page
+
+### Step 1: Analyze Each Page
+Apply Chain of Thought reasoning to the extracted content:
+
+1. **Identify knowledge items**: What concepts, procedures, or assessments are on this page?
+2. **Classify each item**: ConceptualKnowledge? ProceduralKnowledge? AssessmentKnowledge?
+3. **Check for continuations**: Does content continue from other pages?
+4. **Find relationships**: How does this page's content relate to existing nodes?
+
+### Step 2: Merge or Create Nodes
+
+**CRITICAL: Nodes evolve as you process more pages. Always UPDATE existing nodes with new information rather than creating duplicates.**
+
+**BEFORE creating any new node, ask:**
+- ✓ Does a node with this `name` already exist in the graph?
+  - **YES** → UPDATE the existing node with new information
+  - **NO** → CREATE a new node
+
+#### When to UPDATE Existing Nodes:
+
+**Scenario 1: Additional Detail**
+```
+Page 2: "angr is a binary analysis framework"
+Page 5: "angr uses symbolic execution to explore program paths and uses Z3 solver"
+
+Action: UPDATE "angr_framework" node
+- Enhance definition with solver details
+- Add "Z3 solver" to related concepts
+- Update source: "file.pdf [page 2, 5]"
+```
+
+**Scenario 2: New Prerequisites Discovered**
+```
+Page 3: Introduces "symbolic_execution" concept
+Page 7: Mentions "symbolic_execution requires understanding of constraint solving"
+
+Action: UPDATE "symbolic_execution" node
+- Add "constraint_solving" to prerequisites array
+- Don't replace existing prerequisites
+```
+
+**Scenario 3: Procedural Step Continuation**
+```
+Page 4: Steps 1-2 of "initialize_angr_project"
+Page 6: Steps 3-4 of the same procedure
+
+Action: UPDATE procedural chain
+- Extend Step2.child to point to Step3
+- Create Step3 and Step4
+- Update percent_done across all steps
+```
+
+**Scenario 4: Assessment Expansion**
+```
+Page 8: Quiz has questions Q1, Q2
+Page 12: Reveals Q3, Q4 and additional evaluation criteria
+
+Action: UPDATE "angr_basics_quiz" node
+- Append Q3, Q4 to question_prompts
+- Append new criteria to evaluation_criteria
+- Increase relevance_score if assessment is more comprehensive
+```
+
+**Scenario 5: Clarification/Correction**
+```
+Page 2: Vague definition "angr helps with binaries"
+Page 10: Detailed explanation with proper terminology
+
+Action: UPDATE "angr_framework" node
+- REPLACE definition with more accurate version
+- INCREASE confidence_score (more evidence)
+- Keep both page numbers in source
+```
+
+#### When to CREATE New Nodes:
+
+**Scenario 1: Genuinely New Concept**
+```
+Page 3: First mention of "constraint_solving"
+
+Action: CREATE new ConceptualKnowledge node
+- Generate new UUID
+- Set source to "file.pdf [page 3]"
+- Link to appropriate parent
+```
+
+**Scenario 2: Different Concept, Similar Name**
+```
+Existing: "symbolic_state" (angr-specific concept)
+Page 8: "symbolic_state" (general program analysis concept)
+
+Action: CREATE new node with disambiguated name
+- Name: "symbolic_state_general" vs "symbolic_state_angr"
+- Or update existing if it's actually the same concept
+```
+
+#### Update Rules by Node Type:
+
+**ConceptualKnowledge Updates:**
+```python
+# Fields to APPEND (arrays):
+- prerequisites: Add newly discovered dependencies
+- misconceptions: Add new misunderstandings found
+- connections: Add new relationships to other concepts
+
+# Fields to REPLACE (when better info found):
+- definition: More complete/accurate definition
+- learning_objective: More precise objective
+- difficulty: Adjust if content reveals different complexity
+
+# Fields to RECALCULATE:
+- confidence_score: Based on cumulative evidence
+- relevance_score: Based on importance in full context
+- source: Append all page numbers where mentioned
+```
+
+**ProceduralKnowledge Updates:**
+```python
+# Extend the chain:
+- child: Point to newly discovered next step
+- percent_done: Recalculate based on total steps
+
+# Fields to APPEND:
+- common_errors: Add new pitfalls discovered
+
+# Fields to REPLACE:
+- learning_objective: More complete description
+```
+
+**AssessmentKnowledge Updates:**
+```python
+# Fields to APPEND:
+- linked_challenges: Add newly mentioned challenges
+- objectives: Add new assessment goals
+- question_prompts: Add new questions
+- evaluation_criteria: Add new criteria
+
+# DO NOT create separate assessment nodes for the same topic
+```
+
+#### Examples of WRONG Behavior:
+
+❌ **Creating duplicates:**
+```json
+// Page 2 creates:
+{"name": "angr_framework", "definition": "Brief definition"}
+
+// Page 5 WRONGLY creates:
+{"name": "angr_framework_advanced", "definition": "Detailed definition"}
+
+// CORRECT: Update the existing node instead
+```
+
+❌ **Replacing arrays:**
+```json
+// Existing:
+{"misconceptions": ["misconception_1", "misconception_2"]}
+
+// Page 7 WRONGLY replaces:
+{"misconceptions": ["misconception_3"]}  // Lost 1 & 2!
+
+// CORRECT:
+{"misconceptions": ["misconception_1", "misconception_2", "misconception_3"]}
+```
+
+❌ **Breaking procedural chains:**
+```json
+// Existing: Step1 → Step2 → null
+// Page 5 WRONGLY creates parallel chain: StepA → StepB → null
+
+// CORRECT: Extend existing chain: Step1 → Step2 → Step3 → Step4 → null
+```
+
+### When updating existing nodes:
+**Summary - Update Decision Process:**
+```
+For each piece of information on this page:
+
+1. Identify what it describes (concept/procedure/assessment)
+2. Search existing graph for matching name
+3. If found:
+   ✓ Same concept → UPDATE with new information
+   ✓ Different concept → CREATE new node with unique name
+4. If not found:
+   ✓ CREATE new node
+5. Track source page numbers for all updates
+6. Adjust confidence/relevance scores based on cumulative evidence
+```
+
+**When creating new nodes:**
+- Generate a unique `id` (UUID format)
+- Set `source` to "{{ source_filename }} [page {{ page_num }}]"
+- Follow hierarchy rules (see system prompt)
+- Link to appropriate parent node
+- Add connections to related ConceptualKnowledge
+
+### Step 3: Handle Procedural Chains
+
+If this page contains procedural steps:
+```
+Existing: P01-step1 → P01-step2 → null
+This page: Continues with step 3, step 4
+
+Result: P01-step1 → P01-step2 → P01-step3 → P01-step4 → null
+         (update P01-step2.child = P01-step3)
+         (create P01-step3, P01-step4)
+```
+
+### Step 4: Update Metadata
+
+For all nodes touched on this page:
+- Update `source` to include "{{ source_filename }} [page {{ page_num }}]"
+- Adjust `percent_done` for procedural nodes based on completion
+- Set `validation_status` to "pending" for newly extracted content
+- Assign appropriate `confidence_score` and `relevance_score`
+
+### Step 5: Validate Structure & Updates
+
+Before returning, verify:
+
+**Structural Validation:**
+- ✓ RootKnowledge has only ConceptualKnowledge children
+- ✓ ConceptualKnowledge has only ProceduralKnowledge/AssessmentKnowledge children
+- ✓ ProceduralKnowledge chains are linear (single child per node)
+- ✓ AssessmentKnowledge has no children
+- ✓ No circular references exist
+- ✓ All required fields are populated
+
+**Update Validation:**
+- ✓ No duplicate nodes with the same `name` exist
+- ✓ All nodes touched on this page have updated `source` with the page number
+- ✓ Array fields were APPENDED to, not replaced
+- ✓ Procedural chains are properly extended (no gaps)
+- ✓ Confidence scores reflect cumulative evidence
+- ✓ IDs are consistent with previous pages
+
+**Data Quality Checks:**
+- ✓ Definitions are clear and complete (updated if better version found)
+- ✓ Prerequisites are comprehensive (all dependencies listed)
+- ✓ Procedural percent_done values add up correctly
+- ✓ Assessment criteria cover all objectives
+- ✓ Source citations include all relevant pages
+
+---
+
+## Output Requirements
+
+Return the **COMPLETE, UPDATED knowledge graph** as a single JSON object.
+
+**CRITICAL:**
+- Include ALL nodes (both from previous pages AND this page)
+- Do NOT return only the changes - return the full merged graph
+- Ensure the structure follows the RootKnowledge schema
+- All IDs must remain consistent across pages
+- The JSON must be valid and parsable
+
+**Response format:**
+```json
+{
+  "id": "existing-root-id",
+  "type": "root",
+  "name": "Central node",
+  "sources": ["{{ source_filename }}"],
+  "children": [/* Complete merged children array */]
+}
+```
+
+{% if last_page  %}
+---
+## Final Page Notice
+
+This is the **LAST PAGE** of the document. Ensure:
+- All procedural chains are properly terminated (final step.child = null)
+- All `percent_done` values are accurate
+- All sections/challenges from the document are represented
+- The knowledge graph is complete and comprehensive
+{% endif %}
