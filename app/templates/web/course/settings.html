@@ -127,7 +127,7 @@
                     <button id="detail-close" class="btn btn-ghost btn-xs btn-circle">✕</button>
                 </div>
                 <div id="detail-badge" class="mb-3"></div>
-                <div id="detail-fields" class="space-y-2 text-sm"></div>
+                <div id="detail-fields" class="space-y-3 text-sm"></div>
 
                 <!-- Action buttons -->
                 <div class="divider my-2"></div>
@@ -735,220 +735,269 @@
         return lines.join('\n');
     }
 
-    function buildGraphData(root) {
-        const nodeMap = new Map(), edges = [];
-        function addNode(n) {
-            if (!n || !n.id || nodeMap.has(n.id)) return;
-            const t = normalizeType(n.type);
-            allNodesRaw[n.id] = n;
-            const rawLabel = n.label || n.name || n.id;
-            const label = wrapLabel(rawLabel.substring(0, 40), 14);
-            const lineCount = label.split('\n').length;
-            const longestLine = Math.max(...label.split('\n').map(l => l.length));
-            const nodeWidth = Math.max(60, longestLine * 8 + 24);
-            const nodeHeight = Math.max(40, lineCount * 16 + 16);
-            nodeMap.set(n.id, {
-                id: n.id,
-                label: label,
-                nodeType: t,
-                type: 'rect',
-                size: [nodeWidth, nodeHeight],
-                anchorPoints: [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]],
-                style: {
-                    fill: getNodeColor(t),
-                    stroke: '#1F2937',
-                    lineWidth: 2,
-                    radius: 8,
-                },
-            });
+    /* ── Progressive-reveal state ── */
+    let parentOf = {};
+    let childrenOf = {};
+    let expandedIds = new Set();
+    let visibleIds = new Set();
+
+    function collectAllNodes(node, parent) {
+        if (!node || !node.id) return;
+        allNodesRaw[node.id] = node;
+        parentOf[node.id] = parent ? parent.id : null;
+        if (!childrenOf[node.id]) childrenOf[node.id] = [];
+        if (parent) {
+            if (!childrenOf[parent.id]) childrenOf[parent.id] = [];
+            if (!childrenOf[parent.id].includes(node.id))
+                childrenOf[parent.id].push(node.id);
         }
-        function addEdge(s, t, rel) {
-            if (!s || !t) return;
-            const isChild = !rel || rel === 'HAS_CHILD';
-            const color = isChild ? '#60A5FA' : '#9CA3AF';
-            const edge = {
-                source: s, target: t,
-                style: { stroke: color, endArrow: { path: G6.Arrow.triangle(8, 10, 0), fill: color } },
-            };
-            if (isChild) {
-                // Vertical: bottom of parent → top of child
-                edge.sourceAnchor = 2;
-                edge.targetAnchor = 0;
-            } else {
-                // Horizontal: side to side for relationships
-                edge.sourceAnchor = 1;
-                edge.targetAnchor = 3;
-                edge.label = rel;
-            }
-            edges.push(edge);
-        }
-        function walk(n) {
-            addNode(n);
-            collectChildren(n).forEach(ch => { addNode(ch); addEdge(n.id, ch.id, 'HAS_CHILD'); walk(ch); });
-            if (Array.isArray(n.connections)) n.connections.forEach(c => addEdge(n.id, c.to, c.relation));
-        }
-        walk(root);
-        return { nodes: Array.from(nodeMap.values()), edges };
+        collectChildren(node).forEach(ch => collectAllNodes(ch, node));
     }
 
-    function buildTreeData(root) {
-        if (!root) return null;
-        const t = normalizeType(root.type);
-        allNodesRaw[root.id] = root;
-        const rawLabel = root.label || root.name || root.id;
-        const label = wrapLabel(rawLabel.substring(0, 40), 14);
-        const lineCount = label.split('\n').length;
-        const longestLine = Math.max(...label.split('\n').map(l => l.length));
-        const nodeWidth = Math.max(60, longestLine * 8 + 24);
-        const nodeHeight = Math.max(40, lineCount * 16 + 16);
-        const node = {
-            id: root.id,
-            label: label,
+    function getShortLabel(node) {
+        const name = node.name || node.id;
+        const t = normalizeType(node.type);
+        if (t === 'root') return 'KG';
+        // Exact: "C01", "P03", "A02"
+        if (/^[CPA]\d+$/i.test(name)) return name.toUpperCase();
+        // Step nodes: "P01-step2" → "P01·2"
+        const stepMatch = name.match(/^([CPA]\d+)-step(\d+)$/i);
+        if (stepMatch) return stepMatch[1].toUpperCase() + '·' + stepMatch[2];
+        // Fallback: initials of label words
+        const label = node.label || name;
+        return label.split(/[\s_\-]+/).map(w => w[0] || '').join('').toUpperCase().substring(0, 4) || '?';
+    }
+
+    function buildG6NodeModel(node) {
+        const t = normalizeType(node.type);
+        const hasHidden = (childrenOf[node.id] || []).some(id => !visibleIds.has(id));
+        const isExpanded = expandedIds.has(node.id);
+        const sizeMap = { root: 64, conceptual: 58, procedural: 50, assessment: 50 };
+        const size = sizeMap[t] || 50;
+        return {
+            id: node.id,
+            label: getShortLabel(node),
             nodeType: t,
-            type: 'rect',
-            size: [nodeWidth, nodeHeight],
-            style: { fill: getNodeColor(t), stroke: '#1F2937', lineWidth: 2, radius: 8 },
-            labelCfg: { style: { fill: '#1F2937', fontSize: 11, fontWeight: 500 } },
-            children: [],
+            type: 'circle',
+            size: size,
+            labelCfg: {
+                position: 'bottom',
+                offset: 8,
+                style: { fill: '#374151', fontSize: 11, fontWeight: 600 },
+            },
+            style: {
+                fill: getNodeColor(t),
+                stroke: hasHidden && !isExpanded ? '#F59E0B' : getNodeStroke(t),
+                lineWidth: hasHidden && !isExpanded ? 3 : 2,
+                lineDash: hasHidden && !isExpanded ? [5, 4] : [],
+                shadowColor: 'rgba(0,0,0,0.18)',
+                shadowBlur: 10,
+                cursor: 'pointer',
+            },
         };
-        collectChildren(root).forEach(ch => {
-            const childNode = buildTreeData(ch);
-            if (childNode) node.children.push(childNode);
-        });
-        return node;
     }
 
-    function collectRelationshipEdges(root) {
-        const edges = [];
-        function walk(n) {
-            if (!n) return;
-            if (Array.isArray(n.connections)) {
-                n.connections.forEach(c => {
-                    edges.push({ source: n.id, target: c.to, label: c.relation });
+    function buildG6EdgeModel(sourceId, targetId, rel) {
+        const isChild = !rel || rel === 'HAS_CHILD';
+        const color = isChild ? '#60A5FA' : '#9CA3AF';
+        return {
+            id: sourceId + '->' + targetId + (rel || ''),
+            source: sourceId,
+            target: targetId,
+            label: isChild ? '' : rel,
+            style: {
+                stroke: color,
+                lineWidth: isChild ? 2 : 1,
+                lineDash: isChild ? [] : [4, 3],
+                endArrow: { path: G6.Arrow.triangle(8, 10, 0), fill: color },
+                opacity: 0.85,
+            },
+            labelCfg: rel && !isChild ? {
+                autoRotate: true,
+                style: { fill: '#6B7280', fontSize: 9, background: { fill: '#F3F4F6', padding: [2, 4, 2, 4], radius: 2 } },
+            } : {},
+        };
+    }
+
+    function initInteractiveGraph(root) {
+        if (g6Graph) { g6Graph.destroy(); g6Graph = null; }
+        parentOf = {}; childrenOf = {}; expandedIds = new Set(); visibleIds = new Set();
+
+        collectAllNodes(root, null);
+
+        // Initial view: root + conceptual nodes only
+        visibleIds.add(root.id);
+        (childrenOf[root.id] || []).forEach(id => {
+            if (normalizeType((allNodesRaw[id] || {}).type) === 'conceptual') visibleIds.add(id);
+        });
+
+        const w = graphContainer.clientWidth, h = graphContainer.clientHeight;
+        g6Graph = new G6.Graph({
+            container: graphContainer, width: w, height: h,
+            animate: false,
+            modes: { default: ['drag-canvas', 'zoom-canvas', 'drag-node'] },
+            layout: currentLayout === 'radial'
+                ? { type: 'radial', unitRadius: 120, linkDistance: 130, preventOverlap: true, nodeSize: 50 }
+                : { type: 'dagre', rankdir: 'TB', nodesep: 70, ranksep: 90 },
+            defaultNode: {
+                type: 'circle', size: 50,
+                labelCfg: { position: 'bottom', offset: 8, style: { fill: '#374151', fontSize: 11, fontWeight: 600 } },
+                style: { shadowColor: 'rgba(0,0,0,0.12)', shadowBlur: 8 },
+            },
+            defaultEdge: {
+                type: 'quadratic',
+                style: { lineWidth: 2, opacity: 0.85, endArrow: { path: G6.Arrow.triangle(8, 10, 0), fill: '#60A5FA' } },
+            },
+            nodeStateStyles: {
+                selected: { lineWidth: 4, shadowColor: 'rgba(0,0,0,0.4)', shadowBlur: 18 },
+            },
+            fitView: true, fitViewPadding: 60,
+        });
+
+        // Build initial data
+        const nodes = [], edges = [];
+        visibleIds.forEach(id => {
+            const n = allNodesRaw[id];
+            if (n) nodes.push(buildG6NodeModel(n));
+        });
+        visibleIds.forEach(id => {
+            const pid = parentOf[id];
+            if (pid && visibleIds.has(pid)) edges.push(buildG6EdgeModel(pid, id, null));
+        });
+
+        g6Graph.data({ nodes, edges });
+        g6Graph.render();
+        g6Graph.fitView();
+
+        // Grow-in entrance for initial nodes
+        g6Graph.getNodes().forEach((item, i) => {
+            const shape = item.getKeyShape();
+            const finalR = shape.attr('r') || 25;
+            shape.attr('r', 0);
+            shape.animate(
+                ratio => ({ r: ratio * finalR }),
+                { duration: 550, delay: i * 60, easing: 'easeCubicOut' }
+            );
+        });
+
+        g6Graph.on('node:click', evt => {
+            const nodeId = evt.item.getModel().id;
+            showNodeDetail(nodeId);
+            toggleExpand(nodeId);
+        });
+        g6Graph.on('canvas:click', () => hideNodeDetail());
+
+        g6Graph.on('node:mouseenter', evt => {
+            const model = evt.item.getModel();
+            const node = allNodesRaw[model.id];
+            if (!node) return;
+            const hasChildren = (childrenOf[model.id] || []).length > 0;
+            const hint = hasChildren
+                ? (expandedIds.has(model.id) ? ' · click to collapse' : ' · click to expand')
+                : '';
+            statusEl.textContent = (node.label || node.name || model.id) + hint;
+        });
+        g6Graph.on('node:mouseleave', () => { statusEl.textContent = 'Click a node to view details and actions.'; });
+    }
+
+    function toggleExpand(nodeId) {
+        const children = childrenOf[nodeId] || [];
+        if (!children.length) return;
+        if (expandedIds.has(nodeId)) collapseNode(nodeId);
+        else expandNode(nodeId);
+        // Refresh this node's appearance (dashed border changes)
+        const item = g6Graph.findById(nodeId);
+        if (item) g6Graph.updateItem(item, buildG6NodeModel(allNodesRaw[nodeId]));
+    }
+
+    function expandNode(nodeId) {
+        expandedIds.add(nodeId);
+        const toAdd = [];
+        (childrenOf[nodeId] || []).forEach(childId => {
+            if (visibleIds.has(childId)) return;
+            visibleIds.add(childId);
+            const child = allNodesRaw[childId];
+            if (!child) return;
+            toAdd.push({ childId, child });
+        });
+
+        toAdd.forEach(({ childId, child }) => {
+            g6Graph.addItem('node', buildG6NodeModel(child));
+            g6Graph.addItem('edge', buildG6EdgeModel(nodeId, childId, null));
+            if (Array.isArray(child.connections)) {
+                child.connections.forEach(conn => {
+                    if (visibleIds.has(conn.to)) {
+                        try { g6Graph.addItem('edge', buildG6EdgeModel(childId, conn.to, conn.relation)); } catch(e) {}
+                    }
                 });
             }
-            collectChildren(n).forEach(ch => walk(ch));
+        });
+
+        g6Graph.layout();
+
+        // Grow-in: animate node radius from 0
+        toAdd.forEach(({ childId }, i) => {
+            setTimeout(() => {
+                const item = g6Graph.findById(childId);
+                if (!item) return;
+                const shape = item.getKeyShape();
+                const finalR = shape.attr('r') || 25;
+                shape.attr('r', 0);
+                shape.animate(
+                    ratio => ({ r: ratio * finalR }),
+                    { duration: 400, easing: 'easeCubicOut' }
+                );
+            }, 200 + i * 50);
+        });
+
+        setTimeout(() => g6Graph.fitView(), 700);
+    }
+
+    function collapseNode(nodeId) {
+        expandedIds.delete(nodeId);
+        function descendants(id) {
+            const r = [];
+            (childrenOf[id] || []).forEach(cid => { if (visibleIds.has(cid)) { r.push(cid); r.push(...descendants(cid)); } });
+            return r;
         }
-        walk(root);
-        return edges;
-    }
+        const toRemove = descendants(nodeId);
 
-    function switchLayout(mode) {
-        currentLayout = mode;
-        document.getElementById('layout-dagre').classList.toggle('btn-active', mode === 'dagre');
-        document.getElementById('layout-radial').classList.toggle('btn-active', mode === 'radial');
-        if (cachedRawRoot) renderGraph(buildGraphData(cachedRawRoot));
-    }
+        // Shrink-out: animate radius to 0, then remove
+        let pending = toRemove.length;
+        if (!pending) { g6Graph.layout(); setTimeout(() => g6Graph.fitView(), 700); return; }
 
-    function renderGraph(data) {
-        if (g6Graph) g6Graph.destroy();
-        const w = graphContainer.clientWidth, h = graphContainer.clientHeight;
-
-        if (currentLayout === 'radial' && cachedRawRoot) {
-            const treeData = buildTreeData(cachedRawRoot);
-            g6Graph = new G6.TreeGraph({
-                container: graphContainer, width: w, height: h,
-                animate: false,
-                modes: { default: ['drag-canvas', 'zoom-canvas', 'drag-node'] },
-                layout: {
-                    type: 'compactBox',
-                    radial: true,
-                    direction: 'RL',
-                    getId: function(d) { return d.id; },
-                    getHeight: function() { return 100; },
-                    getWidth: function() { return 120; },
-                    getVGap: function() { return 60; },
-                    getHGap: function() { return 80; },
-                },
-                defaultNode: {
-                    type: 'rect',
-                    size: [80, 40],
-                    style: { stroke: '#1F2937', lineWidth: 1.5, radius: 10, shadowColor: 'rgba(0,0,0,0.08)', shadowBlur: 6, shadowOffsetY: 2 },
-                    labelCfg: {
-                        style: { fill: '#1F2937', fontSize: 11, fontWeight: 500, textAlign: 'center' },
-                    },
-                },
-                defaultEdge: {
-                    type: 'cubic-horizontal',
-                    style: { stroke: '#60A5FA', lineWidth: 1.5, endArrow: { path: G6.Arrow.triangle(8, 10, 0), fill: '#60A5FA' } },
-                },
-                nodeStateStyles: {
-                    highlight: { lineWidth: 3, shadowColor: 'rgba(0,0,0,0.3)', shadowBlur: 14 },
-                },
-                fitView: true, fitViewPadding: 60,
-            });
-
-            g6Graph.node(node => ({
-                style: { fill: getNodeColor(node.nodeType), stroke: getNodeStroke(node.nodeType), lineWidth: 1.5, radius: 10, shadowColor: 'rgba(0,0,0,0.08)', shadowBlur: 6, shadowOffsetY: 2 },
-                labelCfg: { style: { fill: '#fff', fontSize: 11, fontWeight: 600 } },
-            }));
-
-            g6Graph.on('node:click', evt => {
-                const nodeId = evt.item.getModel().id;
-                showNodeDetail(nodeId);
-            });
-            g6Graph.on('canvas:click', () => hideNodeDetail());
-
-            g6Graph.data(treeData);
-            g6Graph.render();
-
-            // Add relationship edges (non-HAS_CHILD) after tree renders
-            const relEdges = collectRelationshipEdges(cachedRawRoot);
-            relEdges.forEach(e => {
-                const sourceNode = g6Graph.findById(e.source);
-                const targetNode = g6Graph.findById(e.target);
-                if (sourceNode && targetNode) {
-                    g6Graph.addItem('edge', {
-                        source: e.source,
-                        target: e.target,
-                        label: e.label,
-                        type: 'quadratic',
-                        style: { stroke: '#9CA3AF', lineWidth: 1, lineDash: [4, 3], endArrow: { path: G6.Arrow.triangle(6, 8, 0), fill: '#9CA3AF' } },
-                        labelCfg: { autoRotate: true, style: { fill: '#6B7280', fontSize: 9, background: { fill: '#F3F4F6', padding: [2, 4, 2, 4], radius: 2 } } },
-                    });
+        toRemove.forEach((id, i) => {
+            const item = g6Graph.findById(id);
+            if (!item) { if (!--pending) doRemove(); return; }
+            const shape = item.getKeyShape();
+            const currentR = shape.attr('r') || 25;
+            shape.animate(
+                ratio => ({ r: (1 - ratio) * currentR }),
+                {
+                    duration: 300,
+                    delay: i * 40,
+                    easing: 'easeCubicIn',
+                    callback: () => { if (!--pending) doRemove(); },
                 }
+            );
+        });
+
+        function doRemove() {
+            toRemove.forEach(id => {
+                visibleIds.delete(id); expandedIds.delete(id);
+                const item = g6Graph.findById(id);
+                if (item) g6Graph.removeItem(item);
             });
-
-            g6Graph.fitView();
-        } else {
-            g6Graph = new G6.Graph({
-                container: graphContainer, width: w, height: h,
-                modes: { default: ['drag-canvas', 'zoom-canvas'] },
-                layout: { type: 'dagre', rankdir: 'TB', nodesep: 40, ranksep: 80 },
-                defaultNode: {
-                    type: 'rect',
-                    size: [80, 40],
-                    style: { stroke: '#1F2937', lineWidth: 2, radius: 8 },
-                    labelCfg: {
-                        style: { fill: '#fff', fontSize: 11, fontWeight: 500, textAlign: 'center' },
-                    },
-                },
-                defaultEdge: {
-                    type: 'polyline',
-                    style: { radius: 10, endArrow: true },
-                    labelCfg: { autoRotate: true, style: { fill: '#6B7280', fontSize: 9, background: { fill: '#F3F4F6', padding: [2, 4, 2, 4], radius: 2 } } },
-                },
-                nodeStateStyles: {
-                    highlight: { lineWidth: 3, shadowColor: 'rgba(0,0,0,0.5)', shadowBlur: 12 },
-                },
-                fitView: true, fitViewPadding: 20,
-            });
-
-            g6Graph.node(node => ({
-                style: { fill: getNodeColor(node.nodeType), stroke: '#1F2937', lineWidth: 2, radius: 8 },
-                labelCfg: { style: { fill: '#1F2937', fontSize: 11, fontWeight: 500 } },
-            }));
-
-            g6Graph.on('node:click', evt => {
-                const nodeId = evt.item.getModel().id;
-                showNodeDetail(nodeId);
-            });
-            g6Graph.on('canvas:click', () => hideNodeDetail());
-
-            g6Graph.data(data);
-            g6Graph.render();
-            g6Graph.fitView();
+            g6Graph.layout();
+            setTimeout(() => g6Graph.fitView(), 700);
         }
+    }
+
+    function switchLayout(type) {
+        currentLayout = type;
+        document.getElementById('layout-dagre').classList.toggle('btn-active', type === 'dagre');
+        document.getElementById('layout-radial').classList.toggle('btn-active', type === 'radial');
+        if (cachedRawRoot) initInteractiveGraph(cachedRawRoot);
     }
 
     /* ── Node detail panel ── */
@@ -986,15 +1035,31 @@
             + (raw.difficulty ? ' <span class="badge badge-outline badge-sm">' + raw.difficulty + '</span>' : '');
 
         let html = '';
-        function field(label, val) {
+        function field(label, val, asList) {
             if (val === undefined || val === null || val === '') return;
             if (Array.isArray(val)) {
                 if (!val.length) return;
-                val = val.map(v => '<span class="badge badge-outline badge-xs">' + escHtml(String(v)) + '</span>').join(' ');
-                html += '<div><span class="font-medium text-base-content/70">' + label + '</span><div class="flex flex-wrap gap-1 mt-1">' + val + '</div></div>';
+                const useList = asList || val.some(v => String(v).length > 40);
+                let inner;
+                if (useList) {
+                    inner = '<ul class="list-disc list-inside space-y-1">'
+                        + val.map(v => '<li class="text-sm text-base-content leading-snug">' + escHtml(String(v)) + '</li>').join('')
+                        + '</ul>';
+                } else {
+                    inner = '<div class="flex flex-wrap gap-1">'
+                        + val.map(v => '<span class="badge badge-outline badge-xs">' + escHtml(String(v)) + '</span>').join('')
+                        + '</div>';
+                }
+                html += '<div class="flex flex-col gap-1">'
+                    + '<span class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">' + label + '</span>'
+                    + inner
+                    + '</div>';
                 return;
             }
-            html += '<div><span class="font-medium text-base-content/70">' + label + ':</span> ' + escHtml(String(val)) + '</div>';
+            html += '<div class="flex flex-col gap-1">'
+                + '<span class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">' + label + '</span>'
+                + '<span class="text-sm text-base-content leading-snug">' + escHtml(String(val)) + '</span>'
+                + '</div>';
         }
 
         field('ID', raw.id);
@@ -1031,7 +1096,7 @@
         } else if (t === 'procedural') {
             field('Bloom Level', raw.bloom_level);
             field('Progress', raw.percent_done !== undefined ? raw.percent_done + '%' : undefined);
-            field('Common Errors', raw.common_errors);
+            field('Common Errors', raw.common_errors, true);
             field('Learning Objective', raw.learning_objective);
             field('Source', raw.source);
             field('Confidence', raw.confidence_score !== undefined ? (raw.confidence_score * 100).toFixed(0) + '%' : undefined);
@@ -1039,10 +1104,10 @@
             field('Validation', raw.validation_status);
         } else if (t === 'assessment') {
             field('Bloom Level', raw.bloom_level);
-            field('Objectives', raw.objectives);
-            field('Questions', raw.question_prompts);
-            field('Linked Challenges', raw.linked_challenges);
-            field('Evaluation Criteria', raw.evaluation_criteria);
+            field('Objectives', raw.objectives, true);
+            field('Questions', raw.question_prompts, true);
+            field('Linked Challenges', raw.linked_challenges, true);
+            field('Evaluation Criteria', raw.evaluation_criteria, true);
         } else if (t === 'root') {
             field('Description', raw.description);
             field('Sources', raw.sources);
@@ -1070,7 +1135,7 @@
             stats.procedural.textContent = nodes.filter(n => normalizeType(n.type) === 'procedural').length;
             stats.assessment.textContent = nodes.filter(n => normalizeType(n.type) === 'assessment').length;
 
-            renderGraph(buildGraphData(root));
+            initInteractiveGraph(root);
             if (selectedNodeId && allNodesRaw[selectedNodeId]) {
                 showNodeDetail(selectedNodeId);
             } else {

@@ -1,3 +1,4 @@
+import re
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
@@ -399,31 +400,9 @@ def api_node_struggle(
     dashboard_service: services.DashboardService = Provide[
         Application.services.dashboard
     ],
-    knowledge_controller: controllers.KnowledgeController = Provide[
-        Application.controllers.knowledge_controller
-    ],
 ):
-    """Return JSON array of {node_id, node_name, struggle} for bar chart."""
-    node_scores = dashboard_service.calculate_node_struggle(course_id)
-    try:
-        knowledge = knowledge_controller.get_knowledge(course_id)
-        nodes_map = {n.id: n for n in knowledge.nodes} if knowledge else {}
-    except Exception:
-        nodes_map = {}
-
-    enriched = []
-    for entry in node_scores:
-        node = nodes_map.get(entry["node_id"])
-        label = node.label if node else entry["node_id"]
-        enriched.append(
-            {
-                "node_id": entry["node_id"],
-                "node_name": label,
-                "struggle": round(entry["struggle"], 2),
-            }
-        )
-    enriched.sort(key=lambda x: x["struggle"], reverse=True)
-    return jsonify(enriched)
+    """Return JSON array of {node_id, node_name, question_count, hint_count, student_count}."""
+    return jsonify(dashboard_service.calculate_node_engagement(course_id))
 
 
 @app.route("/course/<course_id>/api/student-struggle", methods=["GET"])
@@ -439,25 +418,26 @@ def api_student_struggle(
         Application.controllers.course_controller
     ],
 ):
-    """Return JSON array of {student_id, student_name, struggle} for bar chart."""
-    student_scores = dashboard_service.calculate_student_struggle(course_id)
+    """Return JSON array of {student_id, student_name, email, total_questions, hints_triggered, unique_topics}."""
+    activity = dashboard_service.calculate_student_activity(course_id)
     try:
         members = course_controller.get_course_members(course_id)
-        name_map = {s.id: s.name for s in members.get("students", [])}
+        info_map = {s.id: {"name": s.name, "email": s.email} for s in members.get("students", [])}
     except Exception:
-        name_map = {}
+        info_map = {}
 
     enriched = []
-    for entry in student_scores:
-        name = name_map.get(entry["student_id"], entry["student_id"])
-        enriched.append(
-            {
-                "student_id": entry["student_id"],
-                "student_name": name,
-                "struggle": round(entry["struggle"], 2),
-            }
-        )
-    enriched.sort(key=lambda x: x["struggle"], reverse=True)
+    for entry in activity:
+        info = info_map.get(entry["student_id"], {})
+        enriched.append({
+            "student_id": entry["student_id"],
+            "student_name": info.get("name", entry["student_id"]),
+            "student_email": info.get("email", ""),
+            "total_questions": entry["total_questions"],
+            "hints_triggered": entry["hints_triggered"],
+            "unique_topics": entry["unique_topics"],
+            "questions": entry["questions"],
+        })
     return jsonify(enriched)
 
 
@@ -475,38 +455,97 @@ def api_node_struggle_detail(
         Application.controllers.course_controller
     ],
 ):
-    """Return HTMX partial: which students struggle with this node."""
+    """Return HTMX partial: rich breakdown for a conceptual topic node."""
     trajectories = dashboard_service._fetch_trajectories(course_id)
+    conceptual_nodes = dashboard_service._fetch_conceptual_nodes(course_id)
+
+    # Look up label for this node_id
+    node_label = node_id
+    for cn in conceptual_nodes:
+        if cn.get("name") == node_id:
+            node_label = cn.get("label") or node_id
+            break
+
     try:
         members = course_controller.get_course_members(course_id)
-        name_map = {s.id: s.name for s in members.get("students", [])}
+        name_map = {s.id: {"name": s.name, "email": getattr(s, "email", "")} for s in members.get("students", [])}
     except Exception:
         name_map = {}
 
     from collections import defaultdict
 
-    student_node_scores: dict[str, float] = defaultdict(float)
-    for entry in trajectories:
-        if node_id in entry.retrieved_nodes:
-            student_node_scores[entry.user_id] += dashboard_service._struggle(entry)
+    student_data: dict[str, dict] = defaultdict(lambda: {
+        "queries": [], "hints": 0, "procedural_queries": []
+    })
+    total_questions = 0
+    total_hints = 0
 
-    detail_rows = []
-    for uid, score in sorted(
-        student_node_scores.items(), key=lambda x: x[1], reverse=True
-    ):
-        detail_rows.append(
-            {
-                "student_id": uid,
-                "student_name": name_map.get(uid, uid),
-                "struggle": round(score, 2),
-            }
+    for entry in trajectories:
+        matched = dashboard_service._match_conceptual_node(entry.query, conceptual_nodes, entry.retrieved_nodes)
+        if not matched or matched.get("name") != node_id:
+            continue
+        total_questions += 1
+        if entry.hint_triggered:
+            total_hints += 1
+        uid = entry.user_id
+        q_entry = {
+            "query": entry.query,
+            "interaction_type": entry.interaction_type,
+            "hint_triggered": entry.hint_triggered,
+        }
+        student_data[uid]["queries"].append(q_entry)
+        if entry.hint_triggered:
+            student_data[uid]["hints"] += 1
+        # Detect procedural queries via: interaction type, retrieved node names,
+        # or procedural keywords in the query text itself
+        _procedural_kws = {
+            "how", "step", "steps", "solve", "run", "execute", "implement",
+            "do i", "do you", "write", "code", "script", "function",
+            "procedure", "initialize", "setup", "load", "create", "use",
+            "install", "configure", "build", "start", "launch", "call", "fill", "???",
+        }
+        q_lower = entry.query.lower()
+        has_procedural = (
+            entry.interaction_type == "code_request"
+            or any(kw in q_lower for kw in _procedural_kws)
+            or any(
+                re.search(r"(^|[-_])step\d*$|^[Pp]\d+", rn)
+                for rn in (entry.retrieved_nodes or [])
+            )
         )
+        if has_procedural:
+            # Extract procedural node names from retrieved_nodes
+            proc_nodes = [
+                rn for rn in (entry.retrieved_nodes or [])
+                if re.search(r"(^|[-_])step\d*|^[Pp]\d+|procedural", rn, re.IGNORECASE)
+            ]
+            student_data[uid]["procedural_queries"].append({
+                "query": entry.query,
+                "nodes": proc_nodes,
+            })
+
+    students = []
+    for uid, data in student_data.items():
+        info = name_map.get(uid, {})
+        students.append({
+            "student_id": uid,
+            "student_name": info.get("name", uid),
+            "student_email": info.get("email", ""),
+            "query_count": len(data["queries"]),
+            "hints": data["hints"],
+            "procedural_queries": data["procedural_queries"],
+            "queries": data["queries"],
+        })
+    students.sort(key=lambda s: s["query_count"], reverse=True)
 
     return render_template(
         "course/_struggle_detail.html",
         detail_type="node",
         node_id=node_id,
-        rows=detail_rows,
+        node_label=node_label,
+        total_questions=total_questions,
+        total_hints=total_hints,
+        students=students,
         course_id=course_id,
     )
 
@@ -523,54 +562,46 @@ def api_student_struggle_detail(
     dashboard_service: services.DashboardService = Provide[
         Application.services.dashboard
     ],
-    knowledge_controller: controllers.KnowledgeController = Provide[
-        Application.controllers.knowledge_controller
-    ],
     course_controller: controllers.CourseController = Provide[
         Application.controllers.course_controller
     ],
 ):
-    """Return HTMX partial: which nodes this student struggles with."""
+    """Return HTMX partial: full question history for this student."""
     trajectories = dashboard_service._fetch_trajectories(course_id)
-    try:
-        knowledge = knowledge_controller.get_knowledge(course_id)
-        nodes_map = {n.id: n for n in knowledge.nodes} if knowledge else {}
-    except Exception:
-        nodes_map = {}
-
-    from collections import defaultdict
-
-    node_scores: dict[str, float] = defaultdict(float)
-    for entry in trajectories:
-        if entry.user_id == student_id:
-            score = dashboard_service._struggle(entry)
-            for nid in entry.retrieved_nodes:
-                node_scores[nid] += score
-
-    detail_rows = []
-    for nid, score in sorted(node_scores.items(), key=lambda x: x[1], reverse=True):
-        node = nodes_map.get(nid)
-        label = node.label if node else nid
-        detail_rows.append(
-            {
-                "node_id": nid,
-                "node_name": label,
-                "struggle": round(score, 2),
-            }
-        )
 
     try:
         members = course_controller.get_course_members(course_id)
-        name_map = {s.id: s.name for s in members.get("students", [])}
-        student_name = name_map.get(student_id, student_id)
+        info_map = {s.id: {"name": s.name, "email": s.email} for s in members.get("students", [])}
+        info = info_map.get(student_id, {})
+        student_name = info.get("name", student_id)
+        student_email = info.get("email", "")
     except Exception:
         student_name = student_id
+        student_email = ""
+
+    conceptual_nodes = dashboard_service._fetch_conceptual_nodes(course_id)
+
+    questions = []
+    for e in trajectories:
+        if e.user_id != student_id:
+            continue
+        node = dashboard_service._match_conceptual_node(e.query, conceptual_nodes, e.retrieved_nodes)
+        topic = (node.get("label") or node.get("name")) if node else None
+        questions.append({
+            "query": e.query,
+            "interaction_type": e.interaction_type,
+            "hint_triggered": e.hint_triggered,
+            "hint_text": e.hint_text,
+            "retrieved_nodes": [topic] if topic else [],
+        })
 
     return render_template(
         "course/_struggle_detail.html",
         detail_type="student",
         student_id=student_id,
         student_name=student_name,
-        rows=detail_rows,
+        student_email=student_email,
+        questions=questions,
+        rows=[],
         course_id=course_id,
     )

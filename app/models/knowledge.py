@@ -319,6 +319,7 @@ class ContentChunk(BaseModel):
     chunk_index: int = Field(ge=0)
     course_id: str
     chunk_type: ContentChunkType = Field(default=ContentChunkType.PARAGRAPH)
+    kg_node_id: str | None = None
 
 
 class KnowledgeUploadStatus(StrEnum):

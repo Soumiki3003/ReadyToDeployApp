@@ -56,7 +56,7 @@ def create_app():
 
 def main():
     load_dotenv()
-    create_app().run(debug=True)
+    create_app().run(host="0.0.0.0", debug=True)
 
 
 # === Run Server ===

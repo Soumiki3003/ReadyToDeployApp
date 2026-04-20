@@ -35,10 +35,11 @@ gateways:
       trajectory:
         vector:
           name: "index_trajectory_query_vector"
-          label: "trajectory_vector"
+          label: "UserTrajectory"
+          field_name: "trajectory_vector"
         text:
           name: "index_trajectory_query_text"
-          label: "trajectory_text"
+          label: "UserTrajectory"
           fields:
             - "query"
             - "interaction_type"

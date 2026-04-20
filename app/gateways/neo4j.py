@@ -12,6 +12,7 @@ from neo4j_graphrag.llm.base import LLMInterface
 from neo4j_graphrag.llm.types import LLMResponse, ToolCall, ToolCallResponse
 from neo4j_graphrag.message_history import MessageHistory
 from neo4j_graphrag.retrievers import VectorRetriever
+from neo4j_graphrag.types import RetrieverResultItem
 from neo4j_graphrag.tool import Tool
 from neo4j_graphrag.types import LLMMessage
 from neo4j_graphrag.utils.rate_limit import RateLimitHandler
@@ -129,11 +130,24 @@ def neo4j_graphrag(params: Neo4jGraphRAGParams):
         )
         logger.info(f"Fulltext index '{fulltext_index.name}' created/verified")
 
+    def _result_formatter(record) -> RetrieverResultItem:
+        """Put all node properties into metadata so callers can access kg_node_id etc."""
+        node = record.get("node")
+        score = record.get("score")
+        if node:
+            node_data = dict(node)
+            return RetrieverResultItem(
+                content=node_data.get("content") or str(node),
+                metadata={**node_data, "score": score},
+            )
+        return RetrieverResultItem(content="", metadata={"score": score})
+
     logger.debug("Initializing VectorRetriever")
     retriever = VectorRetriever(
         params.driver,
         params.vector_index.name,
         params.embedder,
+        result_formatter=_result_formatter,
     )
     logger.info("Neo4j GraphRAG initialized successfully")
     return GraphRAG(retriever=retriever, llm=params.llm)
@@ -156,7 +170,8 @@ class Neo4jAgent(LLMInterface):
             raise ValueError("Agent model is required")
 
         model_name = (
-            agent.model if isinstance(agent.model, str) else agent.model.model_name
+            agent.model if isinstance(agent.model, str)
+            else getattr(agent.model, "model_id", None) or agent.model.model_name
         )
         model_kwargs = agent.model_settings
 

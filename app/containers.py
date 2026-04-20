@@ -130,8 +130,9 @@ class Gateways(containers.DeclarativeContainer):
                 gateways.Neo4jGraphRAGVectorIndexParams,
                 name=config.rag.indexes.trajectory.vector.name.required(),
                 label=config.rag.indexes.trajectory.vector.label.required(),
+                field_name=config.rag.indexes.trajectory.vector.field_name.required(),
             ),
-            fulltext_index_params=providers.Factory(
+            fulltext_index=providers.Factory(
                 gateways.Neo4jGraphRAGFulltextIndexParams,
                 name=config.rag.indexes.trajectory.text.name.required(),
                 label=config.rag.indexes.trajectory.text.label.required(),
@@ -192,10 +193,11 @@ class Services(containers.DeclarativeContainer):
     supervisor_agent = providers.Factory(
         services.SupervisorAgentService,
         user_service=user,
-        graph_rag=gateways.trajectory_graphrag,
-        content_rag=gateways.content_chunk_graphrag,
+        graph_rag=gateways.content_chunk_graphrag,
         hint_agent=ai.default_agent,
         rewrite_agent=ai.default_agent,
+        similarity_threshold=0.70,
+        hint_by_similarity_threshold=2,
     )
     dashboard = providers.Factory(
         services.DashboardService,

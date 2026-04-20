@@ -52,36 +52,34 @@
 
 <!-- Charts Grid -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-    <!-- Node-Level Struggle Chart -->
+    <!-- Node Engagement Chart -->
     <div class="card bg-base-100 shadow-md">
         <div class="card-body">
             <h2 class="card-title text-lg">
-                Node-Level Struggle
-                <span class="badge badge-outline badge-sm">0-9 scale</span>
+                Topic Engagement
             </h2>
-            <p class="text-sm text-base-content/60 mb-2">Average struggle per Knowledge Graph topic. Click a bar for details.</p>
+            <p class="text-sm text-base-content/60 mb-2">Question frequency per conceptual topic. Click a point to see which students asked about it.</p>
             <div class="chart-container bar-cursor" id="node-chart-container">
                 <canvas id="nodeStruggleChart"></canvas>
             </div>
             <div id="node-chart-empty" class="hidden text-center py-8 text-base-content/50">
-                No node struggle data available yet.
+                No topic data available yet.
             </div>
         </div>
     </div>
 
-    <!-- Student-Level Struggle Chart -->
+    <!-- Student Activity Chart -->
     <div class="card bg-base-100 shadow-md">
         <div class="card-body">
             <h2 class="card-title text-lg">
-                Student-Level Struggle
-                <span class="badge badge-outline badge-sm">6-16 scale</span>
+                Student Activity
             </h2>
-            <p class="text-sm text-base-content/60 mb-2">Cumulative struggle per student. Click a bar for details.</p>
+            <p class="text-sm text-base-content/60 mb-2">Total questions per student. Click a bar to see their full question history.</p>
             <div class="chart-container bar-cursor" id="student-chart-container">
                 <canvas id="studentStruggleChart"></canvas>
             </div>
             <div id="student-chart-empty" class="hidden text-center py-8 text-base-content/50">
-                No student struggle data available yet.
+                No student activity data available yet.
             </div>
         </div>
     </div>
@@ -132,79 +130,99 @@ const COLORS = [
     'rgba(20, 184, 166, 0.75)',
 ];
 
-/* Node Struggle Chart */
+/* Node Engagement Chart */
 let nodeChart = null;
+let nodeData = [];
 async function loadNodeChart() {
     try {
         const resp = await fetch('/course/' + courseId + '/api/node-struggle');
-        const data = await resp.json();
-        if (!data.length) {
+        nodeData = await resp.json();
+        if (!nodeData.length) {
             document.getElementById('node-chart-container').classList.add('hidden');
             document.getElementById('node-chart-empty').classList.remove('hidden');
             return;
         }
-        const labels = data.map(function(d) { return d.node_name; });
-        const values = data.map(function(d) { return d.struggle; });
-        const nodeIds = data.map(function(d) { return d.node_id; });
+        const labels = nodeData.map(function(d) { return d.node_id; });
+        const values = nodeData.map(function(d) { return d.question_count; });
+        const hintCounts = nodeData.map(function(d) { return d.hint_count; });
+        const studentCounts = nodeData.map(function(d) { return d.student_count; });
         if (nodeChart) nodeChart.destroy();
         var ctx = document.getElementById('nodeStruggleChart').getContext('2d');
         nodeChart = new Chart(ctx, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Struggle Score',
+                    label: 'Question Frequency',
                     data: values,
-                    backgroundColor: values.map(function(_, i) { return COLORS[i % COLORS.length]; }),
-                    borderColor: values.map(function(_, i) { return COLORS[i % COLORS.length].replace('0.75', '1'); }),
-                    borderWidth: 1,
-                    borderRadius: 4,
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                    pointBackgroundColor: values.map(function(_, i) { return COLORS[i % COLORS.length]; }),
+                    pointBorderColor: '#fff',
+                    pointRadius: 7,
+                    pointHoverRadius: 10,
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                indexAxis: 'y',
                 onClick: function(evt, elements) {
                     if (elements.length) {
                         var idx = elements[0].index;
-                        var nid = nodeIds[idx];
+                        var nid = nodeData[idx].node_id;
                         var name = labels[idx];
                         showDrilldown(
-                            'Students struggling with "' + name + '"',
+                            'Students who asked about "' + name + '"',
                             '/course/' + courseId + '/api/struggle-detail/node/' + encodeURIComponent(nid)
                         );
                     }
                 },
                 plugins: {
                     legend: { display: false },
-                    tooltip: { callbacks: { label: function(ctx) { return 'Struggle: ' + ctx.parsed.x.toFixed(2); } } }
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var i = ctx.dataIndex;
+                                return [
+                                    'Frequency: ' + values[i],
+                                    'Hints triggered: ' + hintCounts[i],
+                                    'Students: ' + studentCounts[i],
+                                ];
+                            }
+                        }
+                    }
                 },
                 scales: {
-                    x: { beginAtZero: true, title: { display: true, text: 'Struggle Score (0-9)' }, max: Math.max.apply(null, values) * 1.2 || 10 },
-                    y: { ticks: { font: { size: 11 } } }
+                    x: { ticks: { font: { size: 11 }, maxRotation: 30 }, title: { display: true, text: 'Conceptual Topic' } },
+                    y: { beginAtZero: true, title: { display: true, text: 'Frequency (Questions Asked)' }, ticks: { precision: 0 } }
                 }
             }
         });
     } catch (err) {
-        console.error('Failed to load node struggle data:', err);
+        console.error('Failed to load node engagement data:', err);
     }
 }
 
-/* Student Struggle Chart */
+/* Student Activity Chart */
 let studentChart = null;
+let studentData = [];
 async function loadStudentChart() {
     try {
         const resp = await fetch('/course/' + courseId + '/api/student-struggle');
-        const data = await resp.json();
-        if (!data.length) {
+        studentData = await resp.json();
+        if (!studentData.length) {
             document.getElementById('student-chart-container').classList.add('hidden');
             document.getElementById('student-chart-empty').classList.remove('hidden');
             return;
         }
-        const labels = data.map(function(d) { return d.student_name; });
-        const values = data.map(function(d) { return d.struggle; });
-        const studentIds = data.map(function(d) { return d.student_id; });
+        const labels = studentData.map(function(d) { return d.student_name; });
+        const values = studentData.map(function(d) { return d.total_questions; });
+        const hintCounts = studentData.map(function(d) { return d.hints_triggered; });
+        const uniqueTopics = studentData.map(function(d) { return d.unique_topics; });
+        const emails = studentData.map(function(d) { return d.student_email || ''; });
         if (studentChart) studentChart.destroy();
         var ctx = document.getElementById('studentStruggleChart').getContext('2d');
         studentChart = new Chart(ctx, {
@@ -212,7 +230,7 @@ async function loadStudentChart() {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Struggle Score',
+                    label: 'Total Questions',
                     data: values,
                     backgroundColor: values.map(function(_, i) { return COLORS[(i + 3) % COLORS.length]; }),
                     borderColor: values.map(function(_, i) { return COLORS[(i + 3) % COLORS.length].replace('0.75', '1'); }),
@@ -226,26 +244,37 @@ async function loadStudentChart() {
                 onClick: function(evt, elements) {
                     if (elements.length) {
                         var idx = elements[0].index;
-                        var sid = studentIds[idx];
+                        var sid = studentData[idx].student_id;
                         var name = labels[idx];
                         showDrilldown(
-                            'Topics "' + name + '" struggles with',
+                            name + ' — Question History',
                             '/course/' + courseId + '/api/struggle-detail/student/' + encodeURIComponent(sid)
                         );
                     }
                 },
                 plugins: {
                     legend: { display: false },
-                    tooltip: { callbacks: { label: function(ctx) { return 'Struggle: ' + ctx.parsed.y.toFixed(2); } } }
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var i = ctx.dataIndex;
+                                var lines = ['Total questions: ' + values[i]];
+                                if (emails[i]) lines.push('Email: ' + emails[i]);
+                                lines.push('Hints triggered: ' + hintCounts[i]);
+                                lines.push('Unique topics: ' + uniqueTopics[i]);
+                                return lines;
+                            }
+                        }
+                    }
                 },
                 scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Struggle Score (6-16)' }, max: Math.max.apply(null, values) * 1.2 || 20 },
+                    y: { beginAtZero: true, title: { display: true, text: 'Total Questions Asked' }, ticks: { precision: 0 } },
                     x: { ticks: { font: { size: 11 } } }
                 }
             }
         });
     } catch (err) {
-        console.error('Failed to load student struggle data:', err);
+        console.error('Failed to load student activity data:', err);
     }
 }
 

@@ -134,8 +134,8 @@ class SupervisorAgentService:
             return ""
         lines = []
         for msg in message_history:
-            role = "Student" if msg.role == "user" else "Tutor"
-            lines.append(f"{role}: {msg.content}")
+            role = "Student" if msg["role"] == "user" else "Tutor"
+            lines.append(f"{role}: {msg['content']}")
         return "\n".join(lines)
 
     def __rewrite_query_for_retrieval(
@@ -156,6 +156,32 @@ class SupervisorAgentService:
         rephrased = self.__rewrite_agent.run_sync(prompt).output.strip()
         self.__logger.info(f"Query rewritten for retrieval: '{query}' → '{rephrased}'")
         return rephrased
+
+    @staticmethod
+    def __node_label_from_item(item) -> str:
+        """Extract the KG node name from a retrieved item."""
+        meta = item.metadata if isinstance(item.metadata, dict) else {}
+        # ContentChunk nodes tagged with their KG node ID (most accurate)
+        if meta.get("kg_node_id"):
+            return str(meta["kg_node_id"])
+        # KG nodes (graph_rag) have 'name' in metadata
+        if meta.get("name"):
+            return str(meta["name"])
+        # ContentChunk nodes without kg_node_id: use source_file reference
+        source = meta.get("source_file", "")
+        if source:
+            base = source.rsplit("/", 1)[-1]
+            page = meta.get("page")
+            chunk_idx = meta.get("chunk_index")
+            parts = [base]
+            if page is not None:
+                parts.append(f"p{page}")
+            if chunk_idx is not None:
+                parts.append(f"#{chunk_idx}")
+            return " ".join(parts)
+        if isinstance(item.content, str) and item.content.strip():
+            return item.content.strip()[:60]
+        return "Unknown"
 
     def __retrieve_node_metadata(
         self,
@@ -181,12 +207,7 @@ class SupervisorAgentService:
         if retriever_result := result.retriever_result:
             try:
                 for item in retriever_result.items:
-                    node_name = "Unknown"
-                    if isinstance(item.content, str):
-                        match = re.search(r"'name': '([^']+)'", item.content)
-                        if match:
-                            node_name = match.group(1)
-                    retrieved_nodes.append(node_name)
+                    retrieved_nodes.append(self.__node_label_from_item(item))
                     if isinstance(item.metadata, dict):
                         scores.append(item.metadata.get("score"))
             except Exception as e:
@@ -292,36 +313,161 @@ class SupervisorAgentService:
 
         return hint_triggered, hint_reason, hint_text
 
+
+    @staticmethod
+    def __scaffold_from_chunks(
+        retriever_items: list,
+        query_repeat_count: int,
+    ) -> str | None:
+        """Build a response directly from retrieved chunks without any LLM call.
+
+        Returns None if there isn't enough structured content to build a response.
+        Used as a fallback when the rewrite LLM is unreliable.
+        """
+        if not retriever_items:
+            return None
+
+        contents = []
+        for item in retriever_items[:8]:
+            text = item.content if isinstance(item.content, str) else ""
+            if text.strip():
+                contents.append(text.strip())
+
+        if not contents:
+            return None
+
+        # Separate step chunks (contain " — Code: ") from descriptive chunks
+        step_chunks = [c for c in contents if " — Code: " in c]
+        desc_chunks = [c for c in contents if " — Code: " not in c]
+
+        def _format_step(chunk: str) -> str:
+            """Turn 'Step N: name — Hint: x — Code: y' into a readable block."""
+            parts = {p.split(": ", 1)[0]: p.split(": ", 1)[1]
+                     for p in chunk.split(" — ") if ": " in p}
+            lines = []
+            # Step header is everything before first " — "
+            header = chunk.split(" — ")[0]
+            lines.append(f"**{header}**")
+            if "Hint" in parts:
+                lines.append(f"_{parts['Hint']}_")
+            if "Code" in parts:
+                lines.append(f"```python\n{parts['Code']}\n```")
+            return "\n".join(lines)
+
+        if query_repeat_count == 0:
+            # First ask: concept only, no code
+            intro = desc_chunks[0] if desc_chunks else contents[0]
+            # Strip any trailing code references
+            intro = intro.split(" — Code:")[0].strip()
+            return (
+                f"{intro}\n\n"
+                "Try to think about what the high-level goal of hooking is before looking at the steps. "
+                "What problem does it solve?"
+            )
+
+        elif query_repeat_count == 1:
+            # Second ask: show first step only
+            if step_chunks:
+                return (
+                    "Since you've asked about this before, here's the first concrete step:\n\n"
+                    + _format_step(step_chunks[0])
+                    + "\n\nCan you figure out what the next step would be?"
+                )
+            return desc_chunks[0] if desc_chunks else contents[0]
+
+        else:
+            # Repeated ask: all steps verbatim
+            if step_chunks:
+                steps_text = "\n\n".join(_format_step(c) for c in step_chunks)
+                return (
+                    "Here are all the steps from the course material:\n\n"
+                    + steps_text
+                    + "\n\nRun through each step and come back if you hit an issue."
+                )
+            return "\n\n".join(contents[:5])
+
     def __rewrite_response(
         self,
         raw_answer: str,
         query: str,
         message_history: list[LLMMessage] | None = None,
+        query_repeat_count: int = 0,
+        retriever_items: list | None = None,
     ) -> str:
         if not self.__rewrite_agent or not raw_answer:
             return raw_answer
 
         history_block = self.__format_history(message_history)
         history_context = (
-            f"\n\nRecent conversation (use this to tailor the tone and depth of your answer):\n{history_block}"
+            f"\n\nRecent conversation:\n{history_block}"
             if history_block
             else ""
         )
+
+        # Build a grounding block from raw retrieved chunks so the LLM
+        # cannot hallucinate code or facts that aren't in the course material.
+        source_block = ""
+        if retriever_items:
+            chunks = []
+            for item in retriever_items[:5]:
+                content = item.content if isinstance(item.content, str) else str(item.content)
+                if content.strip():
+                    chunks.append(content.strip())
+            if chunks:
+                source_block = (
+                    "\n\n## Course material (ONLY use facts and code from here — do NOT invent anything):\n"
+                    + "\n---\n".join(chunks)
+                )
+
+        if query_repeat_count == 0:
+            scaffolding_instruction = (
+                "## Scaffolding Level: FIRST ASK\n"
+                "The student is asking about this topic for the first time.\n"
+                "- Explain the CONCEPT behind the answer — what it is and why it matters.\n"
+                "- Give a high-level direction without revealing specific values, addresses, or full code.\n"
+                "- Ask a guiding question to prompt the student to think further.\n"
+                "- Do NOT show complete code snippets yet.\n"
+                "Example style: 'The bitvector size needs to match the input field size. "
+                "If scanf reads an 8-byte string, how many bits would that be?'"
+            )
+        elif query_repeat_count == 1:
+            scaffolding_instruction = (
+                "## Scaffolding Level: SECOND ASK\n"
+                "The student has asked about this before and may be stuck.\n"
+                "- Acknowledge their prior attempt naturally.\n"
+                "- Reveal ONE specific step from the course material with its exact code snippet.\n"
+                "- Explain what that code does so they understand, not just copy.\n"
+                "- Still withhold the complete end-to-end solution.\n"
+                "Example style: 'Since each password is 8 bytes, the bitvector should be "
+                "8*8 = 64 bits: claripy.BVS(\"password0\", 8*8). Can you apply this to the other passwords?'"
+            )
+        else:
+            scaffolding_instruction = (
+                "## Scaffolding Level: REPEATED ASK\n"
+                "The student has asked about this multiple times and is clearly stuck.\n"
+                "- Be direct and complete. Reveal the full relevant code for this step verbatim.\n"
+                "- Reproduce code snippets EXACTLY as they appear in the course material above — "
+                "do NOT paraphrase, simplify, or modify any code.\n"
+                "- Walk through what each line does in plain English after the code block.\n"
+                "- Encourage them to run it and come back if they hit another issue.\n"
+            )
+
         prompt = (
-            "You are a teaching assistant. Rewrite the answer below so it reads as a "
-            "direct, natural response to the student's question.\n\n"
-            "Rules:\n"
+            "You are a Socratic teaching assistant for a CTF/binary analysis course.\n\n"
+            f"{scaffolding_instruction}\n\n"
+            "General rules (always apply):\n"
+            "- NEVER invent code, function names, or APIs. Only use code from the course material above.\n"
             "- Never mention: nodes, graph, knowledge graph, concept node, procedural node, "
             "assessment node, retrieval, scores, labels, edges, PREREQUISITE_FOR, DEPENDS_ON, "
             "EXTENDS_TO, ENABLES, or any other graph relationship names.\n"
             "- Never reference internal system structure or metadata.\n"
             "- Write as if you are a human tutor speaking directly to the student.\n"
-            "- Keep all factual content accurate — only change the framing and language.\n"
-            "- If the student has been asking about related topics, acknowledge that continuity naturally.\n"
-            "- Be concise and clear.\n"
+            "- Do NOT start your response with phrases like 'Here is a rewritten answer' "
+            "or any similar meta-commentary. Just give the answer directly.\n"
+            f"{source_block}"
             f"{history_context}\n\n"
             f"Student question: {query}\n\n"
-            f"Raw answer: {raw_answer}"
+            f"Reference answer: {raw_answer}"
         )
         result = self.__rewrite_agent.run_sync(prompt)
         return result.output.strip()
@@ -427,38 +573,26 @@ class SupervisorAgentService:
             )
             node_entry_count = len(retrieved_nodes)
 
-            # Check confidence threshold; if low, rewrite query and retry
-            if (
-                scores
-                and scores[0] is not None
-                and scores[0] < self.__confidence_threshold
-            ):
+            # Check confidence threshold; if low or no results, try content chunk RAG
+            top_score = scores[0] if scores else None
+            low_confidence = not retrieved_nodes or top_score is None or top_score < self.__confidence_threshold
+            if low_confidence:
                 self.__logger.warning(
-                    f"Low confidence (score={scores[0]:.2f} < {self.__confidence_threshold:.2f}): '{query}'"
+                    f"Trajectory RAG insufficient (nodes={len(retrieved_nodes)}, score={top_score}): '{query}'"
                 )
-                rewritten_query = self.__rewrite_query_for_retrieval(query, message_history)
-                if rewritten_query != query:
-                    rr, rn, rs, rt = self.__retrieve_node_metadata(rewritten_query, message_history)
-                    if rs and rs[0] is not None and rs[0] >= self.__confidence_threshold:
-                        self.__logger.info(f"Rewritten query succeeded (score={rs[0]:.2f})")
-                        query = rewritten_query
-                        rag_result, retrieved_nodes, scores, response_time_sec = rr, rn, rs, rt
+                if self.__content_rag:
+                    # Search content RAG with the original query first (no rewrite)
+                    # to avoid history-poisoned rewrites pulling the wrong chunks.
+                    self.__logger.info("Trying content chunk RAG with original query...")
+                    cr, cn, cs, ct = self.__retrieve_node_metadata(
+                        query, None, graph_rag=self.__content_rag
+                    )
+                    if cn:
+                        self.__logger.info(f"Content chunk RAG succeeded (nodes={len(cn)}, score={cs[0] if cs else None})")
+                        rag_result, retrieved_nodes, scores, response_time_sec = cr, cn, cs, ct
                         node_entry_count = len(retrieved_nodes)
-                    elif self.__content_rag:
-                        self.__logger.info("Trajectory RAG low confidence; trying content chunk RAG...")
-                        cr, cn, cs, ct = self.__retrieve_node_metadata(
-                            rewritten_query, message_history, graph_rag=self.__content_rag
-                        )
-                        if cs and cs[0] is not None and cs[0] >= self.__confidence_threshold:
-                            self.__logger.info(f"Content chunk RAG succeeded (score={cs[0]:.2f})")
-                            query = rewritten_query
-                            rag_result, retrieved_nodes, scores, response_time_sec = cr, cn, cs, ct
-                            node_entry_count = len(retrieved_nodes)
-                        else:
-                            self.__logger.warning("All retrieval attempts below confidence threshold.")
-                            return SupervisorResult(answer=self.RESPONSE_FALLBACK, hint_text=None, hint_reason=None)
                     else:
-                        self.__logger.warning("Rewritten query still below confidence threshold.")
+                        self.__logger.warning("Content chunk RAG also returned no results.")
                         return SupervisorResult(answer=self.RESPONSE_FALLBACK, hint_text=None, hint_reason=None)
                 else:
                     return SupervisorResult(answer=self.RESPONSE_FALLBACK, hint_text=None, hint_reason=None)
@@ -477,12 +611,7 @@ class SupervisorAgentService:
                 retrieved_nodes = []
                 scores = []
                 for item in rag_result.retriever_result.items:
-                    node_name = "Unknown"
-                    if isinstance(item.content, str):
-                        match = re.search(r"'name': '([^']+)'", item.content)
-                        if match:
-                            node_name = match.group(1)
-                    retrieved_nodes.append(node_name)
+                    retrieved_nodes.append(self.__node_label_from_item(item))
                     if isinstance(item.metadata, dict):
                         scores.append(item.metadata.get("score"))
 
@@ -491,6 +620,7 @@ class SupervisorAgentService:
                 query, user_id=user.id
             )
             query_repeat_count = len(similar_trajectory_ids)
+            self.__logger.info(f"Query repeat count: {query_repeat_count} (similar trajectories: {len(similar_trajectory_ids)})")
 
             hint_triggered, hint_reason, hint_text = self.__generate_hint(
                 query,
@@ -501,7 +631,15 @@ class SupervisorAgentService:
             )
 
             raw_answer = rag_result.answer if rag_result else ""
-            rewritten_answer = self.__rewrite_response(raw_answer, query, message_history)
+            retriever_items = (
+                rag_result.retriever_result.items
+                if rag_result and rag_result.retriever_result
+                else None
+            )
+            rewritten_answer = self.__rewrite_response(
+                raw_answer, query, message_history, query_repeat_count,
+                retriever_items=retriever_items,
+            )
 
             new_trajectory = models.UserTrajectory(
                 user_id=user.id,

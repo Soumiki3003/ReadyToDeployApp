@@ -259,18 +259,28 @@ class UserService:
         threshold: float | None = None,
         limit: int | None = None,
     ) -> list[models.UserTrajectory]:
-        config = {}
-        if limit is not None:
-            config["top_k"] = limit
-        if threshold is not None:
-            config["similarity_threshold"] = threshold
+        top_k = limit or 20
         try:
             result = self.__rag.retriever.get_search_results(
                 query_text=query,
-                retriever_config=config,
                 filters={"user_id": user_id},
+                top_k=top_k,
             )
-            return [models.UserTrajectory(**item.data()) for item in result.records]
+            trajectories = []
+            for record in result.records:
+                score = record.get("score") or 0.0
+                if threshold is not None and score < threshold:
+                    continue
+                node = record.get("node")
+                if node is None:
+                    continue
+                try:
+                    data = dict(node)
+                    data["user_id"] = data.get("user_id") or user_id
+                    trajectories.append(models.UserTrajectory(**data))
+                except Exception as parse_err:
+                    self.__logger.debug(f"Skipping malformed trajectory record: {parse_err}")
+            return trajectories
         except Exception as e:
             self.__logger.warning(
                 f"Vector retriever search failed during similarity retrieval: {e}"

@@ -115,6 +115,8 @@ Use these relationship types in the `connections` field:
 - `learning_objective`: What students should do
 - `percent_done`: 0-100 (incremental for multi-step procedures)
 - `child`: Single next step OR null
+- `code_snippet`: **Exact code from the document for this step** (copy verbatim — do NOT paraphrase or omit)
+- `hint`: A guiding hint for students that explains *why* this step matters or what to watch out for
 
 **AssessmentKnowledge:**
 - `linked_challenges`: Set of challenge identifiers
@@ -256,7 +258,14 @@ When creating hints or explanations:
 - **General hints**: High-level direction (e.g., "Consider the initialization parameters")
 - **Specific hints**: Point to relevant concepts (e.g., "Review the Project class constructor")
 - **Structural hints**: Provide scaffolding (e.g., "First load the binary, then create the state")
-- ⚠️ **NEVER reveal complete solutions or full code**
+
+## Code Extraction — CRITICAL
+
+For **ProceduralKnowledge** nodes, you MUST extract code with maximum fidelity:
+- **`code_snippet`**: Copy the exact code from the document verbatim. Do NOT paraphrase, summarize, or omit any lines. If the document shows a complete function or block, include the full block.
+- **`hint`**: Write a pedagogical hint explaining *why* this code works this way, what parameters mean, or what to watch out for. This should help a student understand the step without just copying blindly.
+- If a step has no code in the document, leave `code_snippet` empty — do not invent code.
+- Be maximally detailed: a student should be able to implement the solution from your extracted steps alone.
 
 ---
 

@@ -1,0 +1,524 @@
+{
+  "id": "CTF_KG",
+  "name": "Central node",
+  "children": [
+    {
+      "id": "C01",
+      "name": "Angr Project Setup and Binary Exploration",
+      "label": "Concept 1",
+      "definition": "Understanding how to initialize an angr project, create an initial symbolic state, and explore execution paths to locate a target instruction address in a binary.",
+      "difficulty": "beginner",
+      "bloom_level": "Understand",
+      "prerequisites": [],
+      "misconceptions": [
+        "Assuming angr requires manual symbolic input injection for stdin",
+        "Believing exploration requires manual stepping rather than explore()"
+      ],
+      "visibility": [
+        "supervisor_agent",
+        "instructor"
+      ],
+      "validation_status": "pending",
+      "confidence": 0.92,
+      "relevance_score": 0.87,
+      "source": "CTF_updated.pdf [pages 2\u20137]",
+      "learning_objective": "Initialize an angr project and locate the address producing a success message.",
+      "connections": [
+        {
+          "to": "C02",
+          "relation": "PREREQUISITE_FOR"
+        },
+        {
+          "to": "C03",
+          "relation": "PREREQUISITE_FOR"
+        }
+      ],
+      "children": [
+        {
+          "id": "P01",
+          "name": "Procedural Steps: angr Initialization and Exploration",
+          "label": "Procedural Steps",
+          "description": "Procedure for loading a binary and exploring paths to reach a success state.",
+          "difficulty": "beginner",
+          "bloom_level": "Apply",
+          "common_errors": [
+            "Incorrect binary path",
+            "Using wrong state initialization"
+          ],
+          "success_criteria": [
+            "Binary loads successfully",
+            "Execution reaches success address"
+          ],
+          "error_patterns": [
+            "FileNotFoundError",
+            "angr.errors.SimEngineError"
+          ],
+          "progress_metric": {
+            "completed": false,
+            "percent_done": 0
+          },
+          "children": [
+            {
+              "id": "P01-step1",
+              "name": "Step 1: Load binary",
+              "label": "Procedural Step 1",
+              "code_snippet": "project = angr.Project(path_to_binary)",
+              "hint": "Ensure the path to the challenge binary is correct.",
+              "children": [
+                {
+                  "id": "P01-step2",
+                  "name": "Step 2: Create initial state",
+                  "code_snippet": "initial_state = project.factory.entry_state()",
+                  "hint": "entry_state() begins execution from the program entry point.",
+                  "children": [
+                    {
+                      "id": "P01-step3",
+                      "name": "Step 3: Create simulation manager",
+                      "code_snippet": "simulation = project.factory.simgr(initial_state)",
+                      "hint": "Simulation manager tracks multiple execution states.",
+                      "children": [
+                        {
+                          "id": "P01-step4",
+                          "name": "Step 4: Explore execution paths",
+                          "code_snippet": "simulation.explore(find=print_good_address)",
+                          "hint": "Use the address that prints the success message."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "A01",
+          "name": "Assessment Guide: angr Initialization",
+          "label": "Assessment 1",
+          "linked_challenges": [
+            "00_angr_find"
+          ],
+          "objectives": [
+            "Initialize angr project",
+            "Use symbolic execution to reach success address"
+          ],
+          "question_prompts": [
+            {
+              "question": "What is the role of simulation.explore()?"
+            },
+            {
+              "question": "Why is the success instruction address important?"
+            }
+          ],
+          "evaluation_criteria": [
+            "Binary loads correctly",
+            "Simulation reaches success instruction"
+          ],
+          "bloom_level": "Evaluate",
+          "difficulty": "beginner"
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "name": "Conditional Path Exploration with Find/Avoid",
+      "label": "Concept 2",
+      "definition": "Technique for exploring execution paths using conditional functions to accept or reject program states.",
+      "difficulty": "intermediate",
+      "bloom_level": "Apply",
+      "prerequisites": [
+        "C01"
+      ],
+      "misconceptions": [
+        "Assuming find must always be an address",
+        "Believing avoid conditions automatically terminate states"
+      ],
+      "visibility": [
+        "supervisor_agent",
+        "instructor"
+      ],
+      "validation_status": "pending",
+      "confidence": 0.91,
+      "relevance_score": 0.88,
+      "source": "CTF_updated.pdf [pages 8\u20139]",
+      "learning_objective": "Define functions that detect successful or failing program states.",
+      "connections": [
+        {
+          "to": "C03",
+          "relation": "PREREQUISITE_FOR"
+        }
+      ],
+      "children": [
+        {
+          "id": "P02",
+          "name": "Procedural Steps: Conditional State Checking",
+          "label": "Procedural Steps",
+          "description": "Procedure for defining success and abort conditions during symbolic execution.",
+          "difficulty": "intermediate",
+          "bloom_level": "Apply",
+          "common_errors": [
+            "Incorrect byte encoding",
+            "Comparing strings instead of encoded bytes"
+          ],
+          "success_criteria": [
+            "Correct stdout pattern detection",
+            "Exploration finds valid solution state"
+          ],
+          "error_patterns": [
+            "TypeError comparing bytes and strings"
+          ],
+          "progress_metric": {
+            "completed": false,
+            "percent_done": 0
+          },
+          "children": [
+            {
+              "id": "P02-step1",
+              "name": "Step 1: Capture program output",
+              "label": "Procedural Step 1",
+              "code_snippet": "stdout_output = state.posix.dumps(sys.stdout.fileno())",
+              "hint": "Output is returned as bytes.",
+              "children": [
+                {
+                  "id": "P02-step2",
+                  "name": "Step 2: Define success condition",
+                  "code_snippet": "return b'Good Job' in stdout_output",
+                  "hint": "Use byte encoding when searching output.",
+                  "children": [
+                    {
+                      "id": "P02-step3",
+                      "name": "Step 3: Define abort condition",
+                      "code_snippet": "return b'Try again' in stdout_output",
+                      "hint": "Avoid states that print failure messages.",
+                      "children": [
+                        {
+                          "id": "P02-step4",
+                          "name": "Step 4: Run explore with conditions",
+                          "code_snippet": "simulation.explore(find=is_successful, avoid=should_abort)",
+                          "hint": "Custom functions allow flexible state filtering."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "A02",
+          "name": "Assessment Guide: Conditional Exploration",
+          "label": "Assessment 2",
+          "linked_challenges": [
+            "02_angr_find_condition"
+          ],
+          "objectives": [
+            "Define conditional state filters",
+            "Use stdout analysis for success detection"
+          ],
+          "question_prompts": [
+            {
+              "question": "Why must output comparisons be encoded in bytes?"
+            },
+            {
+              "question": "How do find and avoid conditions influence state exploration?"
+            }
+          ],
+          "evaluation_criteria": [
+            "Correct identification of success states",
+            "Proper handling of byte-based comparisons"
+          ],
+          "bloom_level": "Evaluate",
+          "difficulty": "intermediate"
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "name": "Symbol Injection Techniques in Angr",
+      "label": "Concept 3",
+      "definition": "Understanding how symbolic values can be injected into registers, stack, heap memory, or files to control symbolic execution starting points.",
+      "difficulty": "advanced",
+      "bloom_level": "Analyze",
+      "prerequisites": [
+        "C01",
+        "C02"
+      ],
+      "misconceptions": [
+        "Assuming angr must execute input routines symbolically",
+        "Believing heap addresses must be known beforehand"
+      ],
+      "visibility": [
+        "supervisor_agent",
+        "instructor"
+      ],
+      "validation_status": "pending",
+      "confidence": 0.9,
+      "relevance_score": 0.91,
+      "source": "CTF_updated.pdf [pages 23\u201353]",
+      "learning_objective": "Inject symbolic values into program state to bypass complex input routines.",
+      "connections": [
+        {
+          "to": "C04",
+          "relation": "PREREQUISITE_FOR"
+        }
+      ],
+      "children": [
+        {
+          "id": "P03",
+          "name": "Procedural Steps: Symbol Injection",
+          "label": "Procedural Steps",
+          "description": "Procedure for injecting symbolic bitvectors into registers or global memory locations to bypass input routines like scanf.",
+          "difficulty": "advanced",
+          "bloom_level": "Apply",
+          "common_errors": [
+            "Incorrect bitvector size (must match variable byte width * 8)",
+            "Incorrect register mapping",
+            "Using wrong memory address for global variables",
+            "Forgetting to store all symbolic variables when scanf takes multiple inputs"
+          ],
+          "success_criteria": [
+            "Symbolic values propagate through execution",
+            "Solver produces valid inputs"
+          ],
+          "error_patterns": [
+            "Unsatisfiable constraint error"
+          ],
+          "progress_metric": {
+            "completed": false,
+            "percent_done": 0
+          },
+          "children": [
+            {
+              "id": "P03-step1",
+              "name": "Step 1: Identify the start address (after input routine)",
+              "label": "Procedural Step 1",
+              "hint": "Use GDB or objdump to find the instruction address immediately after the scanf call. Set start_address to this so angr skips executing scanf symbolically.",
+              "code_snippet": "start_address = 0x08048980  # address of instruction after scanf\ninitial_state = project.factory.blank_state(\n    addr=start_address,\n    add_options={angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY,\n                 angr.options.SYMBOL_FILL_UNCONSTRAINED_REGISTERS})",
+              "children": [
+                {
+                  "id": "P03-step2",
+                  "name": "Step 2: Create symbolic bitvectors for each input",
+                  "hint": "Each symbolic variable size must match the input field. For scanf(\"%8s\"), each string is 8 bytes = 64 bits. Create one BVS per input field.",
+                  "code_snippet": "password0 = claripy.BVS('password0', 8*8)\npassword1 = claripy.BVS('password1', 8*8)\npassword2 = claripy.BVS('password2', 8*8)\npassword3 = claripy.BVS('password3', 8*8)",
+                  "children": [
+                    {
+                      "id": "P03-step3",
+                      "name": "Step 3: Find global variable addresses and store symbolic values",
+                      "hint": "Use 'readelf -s binary' or 'objdump -t binary | grep password' to find the BSS addresses where scanf writes each string. Then use memory.store() to write the symbolic bitvectors there.",
+                      "code_snippet": "password0_address = 0x0804a050  # find with readelf/objdump\npassword1_address = 0x0804a058\npassword2_address = 0x0804a060\npassword3_address = 0x0804a068\ninitial_state.memory.store(password0_address, password0)\ninitial_state.memory.store(password1_address, password1)\ninitial_state.memory.store(password2_address, password2)\ninitial_state.memory.store(password3_address, password3)",
+                      "children": [
+                        {
+                          "id": "P03-step4",
+                          "name": "Step 4: Define success and abort conditions",
+                          "hint": "Check stdout for success/failure strings. Use state.posix.dumps(1) to read program output.",
+                          "code_snippet": "def is_successful(state):\n    return b'Good Job' in state.posix.dumps(sys.stdout.fileno())\n\ndef should_abort(state):\n    return b'Try again' in state.posix.dumps(sys.stdout.fileno())",
+                          "children": [
+                            {
+                              "id": "P03-step5",
+                              "name": "Step 5: Run exploration and extract solutions",
+                              "hint": "After simulation.explore(), extract each symbolic password using solver.eval() with cast_to=bytes and decode to string.",
+                              "code_snippet": "simulation.explore(find=is_successful, avoid=should_abort)\nif simulation.found:\n    solution_state = simulation.found[0]\n    solution0 = solution_state.solver.eval(password0, cast_to=bytes).decode()\n    solution1 = solution_state.solver.eval(password1, cast_to=bytes).decode()\n    solution2 = solution_state.solver.eval(password2, cast_to=bytes).decode()\n    solution3 = solution_state.solver.eval(password3, cast_to=bytes).decode()\n    print(solution0 + ' ' + solution1 + ' ' + solution2 + ' ' + solution3)"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "A03",
+          "name": "Assessment Guide: Symbol Injection",
+          "label": "Assessment 3",
+          "linked_challenges": [
+            "03_angr_symbolic_registers",
+            "04_angr_symbolic_stack",
+            "05_angr_symbolic_memory",
+            "06_angr_symbolic_dynamic_memory",
+            "07_angr_symbolic_file"
+          ],
+          "objectives": [
+            "Inject symbolic values into program state",
+            "Understand propagation of constraints"
+          ],
+          "question_prompts": [
+            {
+              "question": "Why inject symbols after input functions?"
+            },
+            {
+              "question": "How does symbolic propagation affect execution paths?"
+            }
+          ],
+          "evaluation_criteria": [
+            "Correct symbolic injection technique",
+            "Successful constraint solving"
+          ],
+          "bloom_level": "Evaluate",
+          "difficulty": "advanced"
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "name": "Constraint-Based Path Reduction",
+      "label": "Concept 4",
+      "definition": "Technique for reducing symbolic execution path explosion by directly constraining symbolic variables before expensive checks.",
+      "difficulty": "advanced",
+      "bloom_level": "Analyze",
+      "prerequisites": [
+        "C03"
+      ],
+      "misconceptions": [
+        "Assuming brute-force path exploration is always feasible"
+      ],
+      "visibility": [
+        "supervisor_agent",
+        "instructor"
+      ],
+      "validation_status": "pending",
+      "confidence": 0.88,
+      "relevance_score": 0.85,
+      "source": "CTF_updated.pdf [pages 55\u201362]",
+      "learning_objective": "Apply constraints to symbolic variables to reduce path explosion.",
+      "connections": [
+        {
+          "to": "C05",
+          "relation": "PREREQUISITE_FOR"
+        }
+      ],
+      "children": [
+        {
+          "id": "P04",
+          "name": "Procedural Steps: Constraint Application",
+          "label": "Procedural Steps",
+          "description": "Procedure for adding constraints to symbolic buffers before expensive checks.",
+          "difficulty": "advanced",
+          "bloom_level": "Apply",
+          "progress_metric": {
+            "completed": false,
+            "percent_done": 0
+          },
+          "children": [
+            {
+              "id": "P04-step1",
+              "name": "Step 1: Create symbolic buffer",
+              "code_snippet": "password = claripy.BVS('password', 16*8)",
+              "hint": "Match the buffer size used in the binary.",
+              "children": [
+                {
+                  "id": "P04-step2",
+                  "name": "Step 2: Load symbolic buffer from memory",
+                  "code_snippet": "bitvector = state.memory.load(address, length)",
+                  "hint": "Use correct memory address.",
+                  "children": [
+                    {
+                      "id": "P04-step3",
+                      "name": "Step 3: Apply constraint",
+                      "code_snippet": "state.add_constraints(bitvector == target_string)",
+                      "hint": "Encode strings using UTF-8."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "name": "Hooks and SimProcedures for Function Replacement",
+      "label": "Concept 5",
+      "definition": "Mechanism for replacing complex program functions with simplified Python logic during symbolic execution to prevent state explosion.",
+      "difficulty": "advanced",
+      "bloom_level": "Analyze",
+      "prerequisites": [
+        "C04"
+      ],
+      "misconceptions": [
+        "Hooks modify binaries permanently",
+        "SimProcedures only work for libc functions"
+      ],
+      "visibility": [
+        "supervisor_agent",
+        "instructor"
+      ],
+      "validation_status": "pending",
+      "confidence": 0.9,
+      "relevance_score": 0.89,
+      "source": "CTF_updated.pdf [pages 63\u201378]",
+      "learning_objective": "Replace complex functions with simplified symbolic models.",
+      "connections": [],
+      "children": [
+        {
+          "id": "P05",
+          "name": "Procedural Steps: Hooking Functions",
+          "label": "Procedural Steps",
+          "description": "Procedure for replacing a function call with a Python implementation.",
+          "difficulty": "advanced",
+          "bloom_level": "Apply",
+          "progress_metric": {
+            "completed": false,
+            "percent_done": 0
+          },
+          "children": [
+            {
+              "id": "P05-step1",
+              "name": "Step 1: Identify function address",
+              "code_snippet": "hook_address = 0x8048781",
+              "hint": "Use disassembly to find the call instruction.",
+              "children": [
+                {
+                  "id": "P05-step2",
+                  "name": "Step 2: Define replacement function",
+                  "code_snippet": "def replacement_check(state): pass",
+                  "hint": "Return result using symbolic bitvectors.",
+                  "children": [
+                    {
+                      "id": "P05-step3",
+                      "name": "Step 3: Register hook",
+                      "code_snippet": "project.hook(hook_address, replacement_check)",
+                      "hint": "Specify instruction length to skip."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "A05",
+          "name": "Assessment Guide: Hooks and SimProcedures",
+          "label": "Assessment 5",
+          "linked_challenges": [
+            "09_angr_hooks",
+            "10_angr_simprocedures",
+            "11_angr_sim_scanf"
+          ],
+          "objectives": [
+            "Replace complex functions with hooks",
+            "Use SimProcedures to simplify repeated checks"
+          ],
+          "question_prompts": [
+            {
+              "question": "Why do hooks help avoid path explosion?"
+            },
+            {
+              "question": "What advantages do SimProcedures provide over hooks?"
+            }
+          ],
+          "evaluation_criteria": [
+            "Correct hook placement",
+            "Successful symbolic execution with reduced state explosion"
+          ],
+          "bloom_level": "Create",
+          "difficulty": "advanced"
+        }
+      ]
+    }
+  ]
+}
