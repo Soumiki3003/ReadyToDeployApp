@@ -1,0 +1,85 @@
+{% extends "base_app.html" %}
+{% block title %}Pre-Study — {{ course.name }} — KnowledgeGraph{% endblock %}
+
+{% block breadcrumb %}
+<div class="breadcrumbs text-sm">
+    <ul>
+        <li><a href="{{ url_for('course.dashboard') }}">Courses</a></li>
+        <li>{{ course.name }}</li>
+        <li>Pre-Study</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Challenge breadcrumb ──────────────────────────────────────────────── #}
+<div class="mb-3 overflow-x-auto">
+    <div class="flex gap-1 min-w-max">
+        {% for item in breadcrumb %}
+        {% if item.unlocked %}
+        <a
+            href="{{ item.url }}"
+            class="btn btn-xs rounded-full
+                {% if item.active %}btn-primary{% elif item.completed %}btn-ghost opacity-60{% else %}btn-outline{% endif %}"
+        >
+            {% if item.completed %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-0.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+            {% endif %}
+            {{ item.label }}
+        </a>
+        {% else %}
+        <span class="btn btn-xs rounded-full btn-ghost opacity-30 cursor-not-allowed">
+            {{ item.label }}
+        </span>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div class="flex items-center justify-center" style="min-height: calc(100vh - 18rem);">
+    <div class="card bg-base-100 shadow-md max-w-md w-full">
+        <div class="card-body items-center text-center gap-5 py-12">
+
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+
+            <div>
+                <h1 class="text-xl font-bold">{{ course.name }}</h1>
+                <p class="text-sm text-base-content/60 mt-1">
+                    Complete the Pre-Study survey to begin the first challenge.
+                </p>
+            </div>
+
+            <button
+                class="btn btn-primary gap-2"
+                onclick="document.getElementById('survey-modal').showModal()"
+                hx-get="{{ url_for('survey.show_form_embed', survey_id='pre_study') }}?course_id={{ course_id }}"
+                hx-target="#survey-modal-body"
+                hx-swap="innerHTML"
+                hx-trigger="click"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Take Pre-Study Survey
+            </button>
+
+        </div>
+    </div>
+</div>
+
+<!-- ── Survey modal ───────────────────────────────────────────────── -->
+<dialog id="survey-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box w-11/12 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div id="survey-modal-body"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+{% endblock %}

@@ -469,12 +469,13 @@ class UserService:
             return session.execute_write(tx_fn, trajectory_id, str(status), hint_text)
 
     def get_approved_hints_for_student(
-        self, user_id: str, course_id: str
+        self, user_id: str, course_id: str, challenge_stage: int | None = None
     ) -> list[models.UserTrajectory]:
         """Return approved hints for a student that have not yet expired.
 
         A hint expires 24 h after it was first read (``hint_read_when`` is set on
         first view).  Hints that have never been read are always returned.
+        When ``challenge_stage`` is given, only hints for that stage are returned.
         """
         expiry_threshold = (
             datetime.now(timezone.utc) - relativedelta(hours=24)
@@ -482,8 +483,18 @@ class UserService:
 
         @unit_of_work()
         def tx_fn(
-            tx: ManagedTransaction, user_id: str, course_id: str, expiry_threshold: str
+            tx: ManagedTransaction, user_id: str, course_id: str, expiry_threshold: str,
+            challenge_stage: int | None,
         ) -> list[models.UserTrajectory]:
+            stage_filter = "AND t.challenge_stage = $challenge_stage" if challenge_stage is not None else ""
+            params = {
+                "user_id": user_id,
+                "course_id": course_id,
+                "approval_status": models.HintApprovalStatus.APPROVED,
+                "expiry_threshold": expiry_threshold,
+            }
+            if challenge_stage is not None:
+                params["challenge_stage"] = challenge_stage
             query = f"""
             MATCH (u:{self.__user_node_name})-[:{self.__trajectory_rel_name}]->(t:{self.__trajectory_node_name})
             WHERE u.id = $user_id
@@ -491,16 +502,11 @@ class UserService:
               AND t.hint_triggered = true
               AND t.hint_approval_status = $approval_status
               AND (t.hint_read_when IS NULL OR t.hint_read_when > $expiry_threshold)
+              {stage_filter}
             RETURN t, u.id AS user_id
             ORDER BY t.timestamp ASC
             """
-            result = tx.run(
-                query,
-                user_id=user_id,
-                course_id=course_id,
-                approval_status=models.HintApprovalStatus.APPROVED,
-                expiry_threshold=expiry_threshold,
-            )
+            result = tx.run(query, **params)
             items = []
             for record in result:
                 data = dict(record["t"])
@@ -509,7 +515,7 @@ class UserService:
             return items
 
         with self.__session_factory() as session:
-            return session.execute_read(tx_fn, user_id, course_id, expiry_threshold)
+            return session.execute_read(tx_fn, user_id, course_id, expiry_threshold, challenge_stage)
 
     def get_all_course_hints_for_student(
         self, user_id: str, course_id: str
@@ -581,6 +587,42 @@ class UserService:
         hint_read_when = datetime.now(timezone.utc).isoformat()
         with self.__session_factory() as session:
             session.execute_write(tx_fn, trajectory_id, course_id, hint_read_when)
+
+    def record_survey_completion(self, user_id: str, course_id: str, survey_id: str) -> None:
+        @unit_of_work()
+        def tx_fn(tx: ManagedTransaction, user_id: str, course_id: str, survey_id: str) -> None:
+            query = f"""
+            MATCH (u:{self.__user_node_name}) WHERE u.id = $user_id
+            MERGE (u)-[:COMPLETED_SURVEY]->(sc:SurveyCompletion {{user_id: $user_id, course_id: $course_id, survey_id: $survey_id}})
+            ON CREATE SET sc.id = $sc_id, sc.completed_at = $completed_at
+            """
+            import uuid
+            from datetime import datetime, timezone
+            tx.run(
+                query,
+                user_id=user_id,
+                course_id=course_id,
+                survey_id=survey_id,
+                sc_id=uuid.uuid4().hex,
+                completed_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        with self.__session_factory() as session:
+            session.execute_write(tx_fn, user_id, course_id, survey_id)
+
+    def get_completed_survey_ids(self, user_id: str, course_id: str) -> list[str]:
+        @unit_of_work()
+        def tx_fn(tx: ManagedTransaction, user_id: str, course_id: str) -> list[str]:
+            query = f"""
+            MATCH (u:{self.__user_node_name})-[:COMPLETED_SURVEY]->(sc:SurveyCompletion)
+            WHERE u.id = $user_id AND sc.course_id = $course_id
+            RETURN sc.survey_id AS survey_id
+            """
+            result = tx.run(query, user_id=user_id, course_id=course_id)
+            return [record["survey_id"] for record in result]
+
+        with self.__session_factory() as session:
+            return session.execute_read(tx_fn, user_id, course_id)
 
     def delete_user(self, id: str) -> None:
         to_update = schemas.UpdateUser(enabled=False)

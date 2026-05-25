@@ -14,7 +14,7 @@
 {% block head %}
 <style>
     #chat-messages {
-        height: calc(100vh - 16rem);
+        height: calc(100vh - {% if breadcrumb %}20rem{% else %}16rem{% endif %});
         overflow-y: auto;
     }
 </style>
@@ -27,21 +27,36 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex gap-4 h-full">
-    <!-- Sidebar -->
-    <div class="w-72 hidden lg:flex flex-col gap-3">
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-body p-4">
-                <h3 class="font-semibold text-sm mb-2">
-                    Topics
-                    <span class="badge badge-warning badge-xs ml-1">WIP</span>
-                </h3>
-                <ul class="menu menu-sm bg-base-200 rounded-box">
-                    <li class="disabled"><a>Progress tracking coming soon</a></li>
-                </ul>
-            </div>
-        </div>
+
+{# ── Challenge breadcrumb (students only) ───────────────────────────────── #}
+{% if breadcrumb %}
+<div class="mb-3 overflow-x-auto">
+    <div class="flex gap-1 min-w-max">
+        {% for item in breadcrumb %}
+        {% if item.unlocked %}
+        <a
+            href="{{ item.url }}"
+            class="btn btn-xs rounded-full
+                {% if item.active %}btn-primary{% elif item.completed %}btn-ghost opacity-60{% else %}btn-outline{% endif %}"
+        >
+            {% if item.completed %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-0.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+            {% endif %}
+            {{ item.label }}
+        </a>
+        {% else %}
+        <span class="btn btn-xs rounded-full btn-ghost opacity-30 cursor-not-allowed">
+            {{ item.label }}
+        </span>
+        {% endif %}
+        {% endfor %}
     </div>
+</div>
+{% endif %}
+
+<div class="flex gap-4 h-full">
 
     <!-- Chat Area -->
     <div class="flex-1 flex flex-col">
@@ -50,16 +65,21 @@
 
                 <!-- Chat header: course name + action buttons -->
                 <div class="flex items-center justify-between mb-1">
-                    <h2 class="font-semibold text-base truncate">{{ course.name }}</h2>
+                    <h2 class="font-semibold text-base truncate">
+                        {{ course.name }}
+                        {% if breadcrumb %}
+                        {% for item in breadcrumb %}{% if item.active %}<span class="text-base-content/50 font-normal ml-1">— {{ item.label }}</span>{% endif %}{% endfor %}
+                        {% endif %}
+                    </h2>
 
                     <div class="flex items-center gap-2 flex-shrink-0">
 
-                        <!-- Survey button (students only) -->
-                        {% if current_user.role == 'student' %}
+                        <!-- Survey button (students on active stage only) -->
+                        {% if current_user.role == 'student' and (is_active is not defined or is_active) %}
                         <button
                             class="btn btn-xs btn-soft btn-primary gap-1 rounded-full px-3"
                             onclick="document.getElementById('survey-modal').showModal()"
-                            hx-get="{{ url_for('survey.list_surveys') }}?course_id={{ course_id }}"
+                            hx-get="{{ url_for('survey.show_form_embed', survey_id=survey_id) }}?course_id={{ course_id }}"
                             hx-target="#survey-modal-body"
                             hx-swap="innerHTML"
                             hx-trigger="click"
@@ -77,7 +97,7 @@
                                 class="btn btn-ghost btn-sm btn-circle tooltip tooltip-left"
                                 data-tip="View hints"
                                 onclick="document.getElementById('hint-modal').showModal()"
-                                hx-get="{{ url_for('course.student_hints', course_id=course_id) }}?index=0"
+                                hx-get="{{ url_for('course.student_hints', course_id=course_id) }}?index=0{% if stage is defined %}&stage={{ stage }}{% endif %}"
                                 hx-target="#hint-modal-body"
                                 hx-swap="innerHTML"
                                 hx-trigger="click"
@@ -90,7 +110,7 @@
                             <!-- Badge (HTMX polling) -->
                             <span
                                 id="hint-badge"
-                                hx-get="{{ url_for('course.student_hints_count', course_id=course_id) }}"
+                                hx-get="{{ url_for('course.student_hints_count', course_id=course_id) }}{% if stage is defined %}?stage={{ stage }}{% endif %}"
                                 hx-trigger="load, every 10s"
                                 hx-swap="innerHTML"
                                 class="absolute -top-1 -right-1 pointer-events-none"
@@ -130,21 +150,19 @@
 
                 <!-- Input -->
                 <div class="divider my-2"></div>
+                {% if is_active is defined and not is_active %}
+                <div class="text-center text-sm text-base-content/50 py-2">
+                    This is a read-only view of a past challenge. Complete the current challenge survey to unlock the next one.
+                </div>
+                {% else %}
                 <form
                     id="chat-form"
-                    hx-post="{{ url_for('course.chat_send', course_id=course_id) }}"
+                    hx-post="{% if stage is defined %}{{ url_for('course.challenge_chat_send', course_id=course_id, stage=stage) }}{% else %}{{ url_for('course.chat_send', course_id=course_id) }}{% endif %}"
                     hx-target="#chat-messages"
                     hx-swap="beforeend"
                     hx-on::after-request="this.reset(); document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;"
                     class="flex gap-2"
                 >
-                    <div class="tooltip tooltip-right" data-tip="Coming soon">
-                        <button type="button" class="btn btn-ghost btn-sm" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                        </button>
-                    </div>
                     <input
                         type="text"
                         name="content"
@@ -158,6 +176,7 @@
                         Send
                     </button>
                 </form>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -165,21 +184,8 @@
 
 <!-- ── Survey modal ───────────────────────────────────────────────── -->
 <dialog id="survey-modal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box max-w-sm">
-        <div class="flex items-center gap-2 mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <h3 class="font-bold text-lg">Select a Survey</h3>
-            <form method="dialog" class="ml-auto">
-                <button class="btn btn-sm btn-circle btn-ghost">✕</button>
-            </form>
-        </div>
-        <div id="survey-modal-body">
-            <div class="flex justify-center py-6">
-                <span class="loading loading-spinner loading-md text-primary"></span>
-            </div>
-        </div>
+    <div class="modal-box w-11/12 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div id="survey-modal-body"></div>
     </div>
     <form method="dialog" class="modal-backdrop">
         <button>close</button>

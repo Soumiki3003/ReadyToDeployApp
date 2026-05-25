@@ -51,6 +51,7 @@ class UserTrajectory(BaseModel):
     hint_read_when: datetime | None = None
     raw_answer: str | None = None
     course_id: str | None = None
+    challenge_stage: int | None = None
 
     user_id: str
 
@@ -72,3 +73,11 @@ class UserTrajectory(BaseModel):
             if self.hint_approval_status is None:
                 self.hint_approval_status = HintApprovalStatus.APPROVED
         return self
+
+
+class SurveyCompletion(BaseModel):
+    id: str = Field(default_factory=utils.uuid4_hex)
+    user_id: str
+    course_id: str
+    survey_id: str
+    completed_at: datetime = Field(default_factory=utils.utc_now)

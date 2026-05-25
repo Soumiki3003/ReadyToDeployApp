@@ -1,0 +1,249 @@
+<div class="space-y-1">
+    <!-- Title row with close button -->
+    <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-bold">{{ survey.title }}</h2>
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost">✕</button></form>
+    </div>
+    {% if survey.description %}
+    <p class="text-xs text-warning bg-warning/10 rounded px-3 py-2 mb-3">{{ survey.description }}</p>
+    {% endif %}
+    <div class="divider my-1"></div>
+
+    <form method="POST" action="{{ url_for('survey.submit', survey_id=survey.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="course_id" value="{{ course_id }}" />
+
+        {% for section in survey.sections %}
+        <div class="mt-6">
+            <h2 class="text-base font-semibold text-primary mb-1">{{ section.title }}</h2>
+            {% if section.description %}
+            <p class="text-xs text-warning bg-warning/10 rounded px-3 py-2 mb-3">{{ section.description }}</p>
+            {% endif %}
+
+            {% for q in section.questions %}
+
+            {# ── Heading (sub-section label) ────────────────────── #}
+            {% if q.type == 'heading' %}
+            <h3 class="text-sm font-semibold mt-5 mb-2 text-base-content/70 border-b pb-1">{{ q.label }}</h3>
+
+            {# ── Display-only (core concept) ────────────────────── #}
+            {% elif q.type == 'display' %}
+            <div class="form-control mb-3">
+                <span class="text-xs font-medium text-base-content/60">{{ q.label }}</span>
+                <span class="text-sm font-semibold">{{ q.value }}</span>
+            </div>
+
+            {# ── Text input ─────────────────────────────────────── #}
+            {% elif q.type == 'text' %}
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">{{ q.label }}</span>
+                </label>
+                <input type="text" name="{{ q.id }}"
+                       class="input input-bordered input-sm w-full max-w-xs"
+                       {% if q.required %}required{% endif %} />
+            </div>
+
+            {# ── Number input ───────────────────────────────────── #}
+            {% elif q.type == 'number' %}
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">{{ q.label }}</span>
+                </label>
+                <input type="number" name="{{ q.id }}" min="0"
+                       class="input input-bordered input-sm w-32"
+                       {% if q.required %}required{% endif %} />
+            </div>
+
+            {# ── Textarea ───────────────────────────────────────── #}
+            {% elif q.type == 'textarea' %}
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">{{ q.label }}</span>
+                </label>
+                <textarea name="{{ q.id }}" rows="4"
+                          class="textarea textarea-bordered text-sm w-full"
+                          placeholder="Your answer here…"
+                          {% if q.required %}required{% endif %}></textarea>
+            </div>
+
+            {# ── Radio ──────────────────────────────────────────── #}
+            {% elif q.type == 'radio' %}
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">{{ q.label }}</span>
+                </label>
+                <div class="flex flex-col gap-1 pl-2">
+                    {% for opt in q.options %}
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="{{ q.id }}" value="{{ opt }}"
+                               class="radio radio-sm radio-primary mt-0.5"
+                               {% if q.required %}required{% endif %} />
+                        <span class="text-sm leading-snug">{{ opt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ── Checkbox ───────────────────────────────────────── #}
+            {% elif q.type == 'checkbox' %}
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">{{ q.label }}</span>
+                </label>
+                <div class="flex flex-col gap-1 pl-2">
+                    {% for opt in q.options %}
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" name="{{ q.id }}" value="{{ opt }}"
+                               class="checkbox checkbox-sm checkbox-primary mt-0.5" />
+                        <span class="text-sm leading-snug">{{ opt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# ── Likert group ───────────────────────────────────── #}
+            {% elif q.type == 'likert_group' %}
+            <div class="form-control mb-4">
+                <p class="text-sm font-medium mb-2">{{ q.label }}</p>
+                <div class="overflow-x-auto">
+                    <table class="table table-xs w-full border border-base-200 rounded-lg">
+                        <thead class="bg-base-200">
+                            <tr>
+                                <th class="text-xs w-full">Statement</th>
+                                {% for n in [1,2,3,4,5] %}
+                                <th class="text-center text-xs">{{ n }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stmt in q.statements %}
+                            <tr class="{% if loop.index is odd %}bg-base-100{% else %}bg-base-200/40{% endif %}">
+                                <td class="text-xs leading-snug py-2">{{ stmt.text }}</td>
+                                {% for n in [1,2,3,4,5] %}
+                                <td class="text-center">
+                                    <input type="radio" name="{{ stmt.id }}" value="{{ n }}"
+                                           class="radio radio-xs radio-primary" />
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-xs text-base-content/50 mt-1">1 = Strongly Disagree &nbsp;·&nbsp; 2 = Disagree &nbsp;·&nbsp; 3 = Neutral &nbsp;·&nbsp; 4 = Agree &nbsp;·&nbsp; 5 = Strongly Agree</p>
+            </div>
+
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {# ── Hints feedback (only when hints were received) ───────── #}
+        {% if hints %}
+        <div class="mt-6">
+            <h2 class="text-base font-semibold text-primary mb-1">Hint Feedback</h2>
+            <p class="text-xs text-warning bg-warning/10 rounded px-3 py-2 mb-3">
+                The AI assistant generated the following hints during your session. Select all that you found useful.
+            </p>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">Which hints did you find useful? (select all that apply)</span>
+                </label>
+                <div class="flex flex-col gap-4 pl-2">
+                    {% for hint in hints %}
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" name="useful_hints" value="{{ hint.hint_text }}"
+                               class="checkbox checkbox-sm checkbox-warning mt-1 flex-shrink-0" />
+                        <div class="bg-base-200 rounded-lg px-3 py-2 text-sm leading-snug w-full">
+                            <span class="text-xs font-semibold text-base-content/50 block mb-1">Hint {{ loop.index }}</span>
+                            {{ hint.hint_text }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">Why did you find those hints useful? (optional)</span>
+                </label>
+                <textarea name="useful_hints_reason" rows="3"
+                          class="textarea textarea-bordered text-sm w-full"
+                          placeholder="Explain what made the hint(s) helpful..."></textarea>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── AI assistant quality feedback (not shown on pre-study) ── #}
+        {% if survey.id != 'pre_study' %}
+        <div class="mt-6">
+            <h2 class="text-base font-semibold text-primary mb-1">AI Assistant Feedback</h2>
+            <p class="text-xs text-base-content/50 mb-3">Help us improve by rating the quality of the AI responses you received.</p>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">Overall, was the AI assistant's output helpful?</span>
+                </label>
+                <div class="flex flex-col gap-1 pl-2">
+                    {% for opt in ['Yes, very helpful', 'Somewhat helpful', 'Not helpful'] %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="llm_output_helpful" value="{{ opt }}"
+                               class="radio radio-sm radio-primary" />
+                        <span class="text-sm">{{ opt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">Did the AI assistant provide any incorrect or misleading information?</span>
+                </label>
+                <div class="flex flex-col gap-1 pl-2">
+                    {% for opt in ['Yes', 'No', 'Not sure'] %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="llm_hallucination" value="{{ opt }}"
+                               class="radio radio-sm radio-primary" />
+                        <span class="text-sm">{{ opt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">
+                        If you noticed incorrect outputs, copy and paste the relevant chat excerpt below as evidence:
+                    </span>
+                </label>
+                <textarea name="llm_hallucination_evidence" rows="5"
+                          class="textarea textarea-bordered text-sm w-full font-mono"
+                          placeholder="Paste the chat excerpt here (e.g. your question + the AI's incorrect response)..."></textarea>
+                <label class="label">
+                    <span class="label-text-alt text-xs text-base-content/50">Copy directly from your chat — do not paraphrase.</span>
+                </label>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">Attach code or screenshot evidence (optional):</span>
+                </label>
+                <input type="file" name="llm_evidence_file"
+                       class="file-input file-input-bordered file-input-sm w-full max-w-sm"
+                       accept=".py,.c,.cpp,.txt,.png,.jpg,.jpeg,.pdf" />
+                <label class="label">
+                    <span class="label-text-alt text-xs text-base-content/50">Accepted: .py .c .cpp .txt .png .jpg .pdf</span>
+                </label>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="divider mt-4 mb-4"></div>
+        <div class="flex gap-3 justify-end">
+            <form method="dialog"><button type="button" class="btn btn-ghost btn-sm">Cancel</button></form>
+            <button type="submit" class="btn btn-primary btn-sm">Submit Survey</button>
+        </div>
+
+    </form>
+</div>

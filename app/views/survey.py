@@ -39,9 +39,35 @@ def show_form(
     return render_template("survey/form.html", survey=survey, hints=hints, course_id=course_id)
 
 
+@app.route("/survey/<survey_id>/embed")
+@login_required
+@inject
+def show_form_embed(
+    survey_id: str,
+    user_service: UserService = Provide[Application.services.user],
+):
+    survey = SURVEYS.get(survey_id)
+    if not survey:
+        abort(404)
+
+    course_id = request.args.get("course_id", "")
+    hints = []
+    if course_id:
+        try:
+            hints = user_service.get_all_course_hints_for_student(current_user.id, course_id)
+        except Exception:
+            hints = []
+
+    return render_template("survey/form_embed.html", survey=survey, hints=hints, course_id=course_id)
+
+
 @app.route("/survey/<survey_id>/submit", methods=["POST"])
 @login_required
-def submit(survey_id):
+@inject
+def submit(
+    survey_id,
+    user_service: UserService = Provide[Application.services.user],
+):
     survey = SURVEYS.get(survey_id)
     if not survey:
         abort(404)
@@ -52,6 +78,8 @@ def submit(survey_id):
     if uploaded and uploaded.filename:
         evidence_file_bytes = uploaded.read()
         evidence_filename = secure_filename(uploaded.filename)
+
+    course_id = request.form.get("course_id", "")
 
     try:
         submit_survey(
@@ -68,9 +96,16 @@ def submit(survey_id):
         success = False
         error = str(e)
 
+    if success and course_id:
+        try:
+            user_service.record_survey_completion(current_user.id, course_id, survey_id)
+        except Exception:
+            pass
+
     return render_template(
         "survey/success.html",
         survey=survey,
         success=success,
         error=error,
+        course_id=course_id,
     )

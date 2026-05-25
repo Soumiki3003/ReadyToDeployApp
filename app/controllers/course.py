@@ -124,24 +124,37 @@ class CourseController:
     ) -> list[models.ChatMessage]:
         return self.__chat_service.get_messages(user_id, course_id)
 
+    def get_current_stage(self, user_id: str, course_id: str) -> int:
+        from app.challenges import get_current_stage
+        completed_ids = self.__user_service.get_completed_survey_ids(user_id, course_id)
+        return get_current_stage(completed_ids)
+
+    def get_challenge_history(
+        self, user_id: str, course_id: str, stage: int
+    ) -> list[models.ChatMessage]:
+        return self.__chat_service.get_messages(user_id, course_id, challenge_stage=stage)
+
+    def record_survey_completion(self, user_id: str, course_id: str, survey_id: str) -> None:
+        self.__user_service.record_survey_completion(user_id, course_id, survey_id)
+
     def chat_send(
-        self, user_id: str, course_id: str, message: str
+        self, user_id: str, course_id: str, message: str, stage: int | None = None
     ) -> schemas.ChatResponse:
         self.__logger.info(
             f"Processing chat message for user {user_id} in course {course_id}"
         )
 
-        history = self.__chat_service.get_messages(user_id, course_id, limit=20)
+        history = self.__chat_service.get_messages(user_id, course_id, limit=20, challenge_stage=stage)
         llm_messages = self.__chat_service.to_llm_messages(history)
 
         self.__chat_service.add_message(
             user_id,
             course_id,
-            models.ChatMessage(role=models.ChatMessageRole.USER, content=message),
+            models.ChatMessage(role=models.ChatMessageRole.USER, content=message, challenge_stage=stage or 0),
         )
 
         result = self.__supervisor_agent_service.retrieve_context(
-            user_id, message, course_id, message_history=llm_messages
+            user_id, message, course_id, message_history=llm_messages, challenge_stage=stage
         )
 
         answer = (
@@ -154,7 +167,7 @@ class CourseController:
         self.__chat_service.add_message(
             user_id,
             course_id,
-            models.ChatMessage(role=models.ChatMessageRole.ASSISTANT, content=answer),
+            models.ChatMessage(role=models.ChatMessageRole.ASSISTANT, content=answer, challenge_stage=stage or 0),
         )
 
         return schemas.ChatResponse(answer=answer, hint_text=hint_text)
@@ -173,8 +186,8 @@ class CourseController:
             trajectory_id, status, hint_text=hint_text
         )
 
-    def get_approved_hints(self, user_id: str, course_id: str):
-        return self.__user_service.get_approved_hints_for_student(user_id, course_id)
+    def get_approved_hints(self, user_id: str, course_id: str, challenge_stage: int | None = None):
+        return self.__user_service.get_approved_hints_for_student(user_id, course_id, challenge_stage=challenge_stage)
 
     def mark_hint_read(self, trajectory_id: str, course_id: str) -> None:
         self.__user_service.mark_hint_read(trajectory_id, course_id)

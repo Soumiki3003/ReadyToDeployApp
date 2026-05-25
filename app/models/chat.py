@@ -16,3 +16,4 @@ class ChatMessage(BaseModel):
     role: ChatMessageRole
     content: str
     timestamp: datetime = Field(default_factory=utils.utc_now)
+    challenge_stage: int = Field(default=0)

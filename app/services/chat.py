@@ -28,6 +28,7 @@ class ChatService:
         course_id: str,
         *,
         limit: int | None = None,
+        challenge_stage: int | None = None,
     ) -> list[models.ChatMessage]:
         @unit_of_work()
         def tx_fn(
@@ -35,28 +36,34 @@ class ChatService:
             user_id: str,
             course_id: str,
             limit: int | None,
+            challenge_stage: int | None,
         ) -> list[models.ChatMessage]:
-            query = f"""
-            MATCH (u:{self.__user_node_name})-[:{self.__user_rel_name}]->(m:{self.__message_node_name})<-[:{self.__course_rel_name}]-(c:{self.__course_node_label})
-            WHERE u.id = $user_id AND c.id = $course_id
-            RETURN m ORDER BY m.timestamp ASC
-            """
+            stage_filter = "AND m.challenge_stage = $challenge_stage" if challenge_stage is not None else ""
             params: dict[str, Any] = {}
+            if challenge_stage is not None:
+                params["challenge_stage"] = challenge_stage
+
             if limit is not None:
                 query = f"""
                 MATCH (u:{self.__user_node_name})-[:{self.__user_rel_name}]->(m:{self.__message_node_name})<-[:{self.__course_rel_name}]-(c:{self.__course_node_label})
-                WHERE u.id = $user_id AND c.id = $course_id
+                WHERE u.id = $user_id AND c.id = $course_id {stage_filter}
                 WITH m ORDER BY m.timestamp DESC
                 LIMIT $limit
                 RETURN m ORDER BY m.timestamp ASC
                 """
                 params["limit"] = limit
+            else:
+                query = f"""
+                MATCH (u:{self.__user_node_name})-[:{self.__user_rel_name}]->(m:{self.__message_node_name})<-[:{self.__course_rel_name}]-(c:{self.__course_node_label})
+                WHERE u.id = $user_id AND c.id = $course_id {stage_filter}
+                RETURN m ORDER BY m.timestamp ASC
+                """
 
             result = tx.run(query, params, user_id=user_id, course_id=course_id)
             return [models.ChatMessage(**record["m"]) for record in result]
 
         with self.__session_factory() as session:
-            return session.execute_read(tx_fn, user_id, course_id, limit)
+            return session.execute_read(tx_fn, user_id, course_id, limit, challenge_stage)
 
     def add_message(
         self,

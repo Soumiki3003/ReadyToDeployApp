@@ -1,10 +1,11 @@
 import re
 from dependency_injector.wiring import Provide, inject
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_pydantic import validate
 
 from app import controllers, schemas, services
+from app.challenges import UNLOCK_SEQUENCE, POST_STUDY_STAGE, build_breadcrumb
 from app.schemas.knowledge import ALLOWED_CHILDREN, BLOOM_LEVELS
 from app.containers import Application
 from app.views.guards import roles_required
@@ -71,6 +72,14 @@ def chat(
         Application.controllers.course_controller
     ],
 ):
+    if current_user.role == "student":
+        current_stage = course_controller.get_current_stage(current_user.id, course_id)
+        if current_stage == 0:
+            return redirect(url_for("course.pre_study", course_id=course_id))
+        if current_stage >= POST_STUDY_STAGE:
+            return redirect(url_for("course.post_study", course_id=course_id))
+        return redirect(url_for("course.challenge_chat", course_id=course_id, stage=current_stage))
+
     course = course_controller.get_course(course_id)
     messages = course_controller.get_chat_history(current_user.id, course_id)
     return render_template(
@@ -95,6 +104,121 @@ def chat_send(
 ):
     try:
         result = course_controller.chat_send(current_user.id, course_id, form.content)
+    except Exception:
+        result = schemas.ChatResponse(
+            answer="An error occurred while processing your message."
+        )
+
+    return render_template(
+        "course/chat_message.html",
+        user_message=form.content,
+        assistant_message=result.answer,
+        hint_text=result.hint_text,
+        user_name=current_user.name,
+    )
+
+
+@app.route("/course/<course_id>/pre-study", methods=["GET"])
+@login_required
+@inject
+def pre_study(
+    course_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    course = course_controller.get_course(course_id)
+    current_stage = course_controller.get_current_stage(current_user.id, course_id)
+    breadcrumb = build_breadcrumb(course_id, current_stage, viewed_stage=0)
+    return render_template(
+        "course/pre_study.html",
+        course=course,
+        course_id=course_id,
+        breadcrumb=breadcrumb,
+        current_stage=current_stage,
+    )
+
+
+@app.route("/course/<course_id>/post-study", methods=["GET"])
+@login_required
+@inject
+def post_study(
+    course_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    course = course_controller.get_course(course_id)
+    current_stage = course_controller.get_current_stage(current_user.id, course_id)
+    if current_stage < POST_STUDY_STAGE:
+        return redirect(url_for("course.chat", course_id=course_id))
+    breadcrumb = build_breadcrumb(course_id, current_stage, viewed_stage=POST_STUDY_STAGE)
+    is_completed = current_stage > POST_STUDY_STAGE
+    return render_template(
+        "course/post_study.html",
+        course=course,
+        course_id=course_id,
+        breadcrumb=breadcrumb,
+        current_stage=current_stage,
+        is_completed=is_completed,
+    )
+
+
+@app.route("/course/<course_id>/challenge/<int:stage>", methods=["GET"])
+@login_required
+@inject
+def challenge_chat(
+    course_id: str,
+    stage: int,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    current_stage = course_controller.get_current_stage(current_user.id, course_id)
+
+    # post_study stage is not a challenge chat page
+    if stage >= POST_STUDY_STAGE:
+        return redirect(url_for("course.post_study", course_id=course_id))
+    if stage > current_stage:
+        return redirect(url_for("course.pre_study", course_id=course_id))
+
+    course = course_controller.get_course(course_id)
+    messages = course_controller.get_challenge_history(current_user.id, course_id, stage)
+    breadcrumb = build_breadcrumb(course_id, current_stage, viewed_stage=stage)
+    is_active = stage == current_stage
+    survey_id = UNLOCK_SEQUENCE[stage] if stage < len(UNLOCK_SEQUENCE) else None
+
+    return render_template(
+        "course/chat.html",
+        course=course,
+        course_id=course_id,
+        messages=messages,
+        breadcrumb=breadcrumb,
+        stage=stage,
+        current_stage=current_stage,
+        is_active=is_active,
+        survey_id=survey_id,
+    )
+
+
+@app.route("/course/<course_id>/challenge/<int:stage>/send", methods=["POST"])
+@login_required
+@validate()
+@inject
+def challenge_chat_send(
+    course_id: str,
+    stage: int,
+    form: schemas.ChatUserMessageFormRequest,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    try:
+        result = course_controller.chat_send(current_user.id, course_id, form.content, stage=stage)
     except Exception:
         result = schemas.ChatResponse(
             answer="An error occurred while processing your message."
@@ -304,7 +428,8 @@ def student_hints_count(
     ],
 ):
     """Return the hint-badge count fragment (HTMX polling target)."""
-    hints = course_controller.get_approved_hints(current_user.id, course_id)
+    stage = request.args.get("stage", type=int)
+    hints = course_controller.get_approved_hints(current_user.id, course_id, challenge_stage=stage)
     return render_template("course/hint_badge.html", count=len(hints))
 
 
@@ -320,7 +445,8 @@ def student_hints(
 ):
     """Return a single approved hint at the requested index (HTMX modal body)."""
     index = request.args.get("index", 0, type=int)
-    hints = course_controller.get_approved_hints(current_user.id, course_id)
+    stage = request.args.get("stage", type=int)
+    hints = course_controller.get_approved_hints(current_user.id, course_id, challenge_stage=stage)
     total = len(hints)
     hint = hints[index] if hints and 0 <= index < total else None
     return render_template(
@@ -388,6 +514,29 @@ def dashboard_progress(
     return render_template(
         "course/dashboard_progress.html",
         course=course,
+        course_id=course_id,
+    )
+
+
+@app.route("/course/<course_id>/api/student-chat/<student_id>", methods=["GET"])
+@roles_required("instructor")
+@inject
+def api_student_chat(
+    course_id: str,
+    student_id: str,
+    *,
+    course_controller: controllers.CourseController = Provide[
+        Application.controllers.course_controller
+    ],
+):
+    """Return a read-only chat transcript for a student's specific CTF stage."""
+    stage = request.args.get("stage", 1, type=int)
+    messages = course_controller.get_challenge_history(student_id, course_id, stage)
+    return render_template(
+        "course/_student_chat.html",
+        messages=messages,
+        stage=stage,
+        student_id=student_id,
         course_id=course_id,
     )
 

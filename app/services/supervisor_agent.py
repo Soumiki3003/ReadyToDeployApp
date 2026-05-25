@@ -556,6 +556,7 @@ class SupervisorAgentService:
         query: str,
         course_id: str,
         message_history: list[LLMMessage] | None = None,
+        challenge_stage: int | None = None,
     ):
         try:
             self.__logger.info(f"Loading user {user_id} state...")
@@ -655,6 +656,7 @@ class SupervisorAgentService:
                 hint_text=hint_text,
                 raw_answer=raw_answer,
                 course_id=course_id,
+                challenge_stage=challenge_stage,
             )
             self.__user_service.add_trajectory_entry(user_id, new_trajectory)
             self.__logger.info(

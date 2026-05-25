@@ -22,6 +22,42 @@ def _heading(label):
     return {'id': f'_h_{label[:8]}', 'type': 'heading', 'label': label}
 
 
+# ---------------------------------------------------------------------------
+# Learning Outcome definitions
+# ---------------------------------------------------------------------------
+
+_LO_STATEMENTS = {
+    'LO1': 'LO1 — Binary & reverse engineering: The CTF challenges helped me understand how to interpret binary executables, read disassembly output, and reason about program logic.',
+    'LO2': 'LO2 — Output-based symbolic execution: I learned how to use symbolic execution (e.g., angr) to find inputs that satisfy a program\'s success condition based on runtime output rather than specific addresses.',
+    'LO3': 'LO3 — Stack manipulation: I can now calculate stack padding, manage stack frames, and place symbolic values at the correct offsets when performing binary analysis.',
+    'LO4': 'LO4 — Start address selection: I understand why choosing the correct start address for symbolic execution matters, and I can identify an appropriate one from a binary.',
+    'LO5': 'LO5 — Dynamic memory simulation: I learned how to simulate dynamic memory allocation by creating fake heap addresses and injecting symbolic values into memory regions.',
+    'LO6': 'LO6 — Symbolic file system creation: I can create symbolic file systems in angr and simulate file-reading operations using tools like SimFile to replace real file input.',
+    'LO7': 'LO7 — Constraint-based solving: I learned how to apply constraints manually in angr to solve challenges when full symbolic execution becomes too complex due to excessive branching.',
+    'LO8': 'LO8 — Function hooking & state explosion management: I can use angr hooks (including SimProcedure) to bypass computationally intensive functions and manage state explosion in symbolic execution.',
+}
+
+
+def _lo_section(lo_ids):
+    statements = [
+        {'id': f'lo_{lo_id.lower()}', 'text': _LO_STATEMENTS[lo_id]}
+        for lo_id in lo_ids
+    ]
+    return {
+        'id': 'lo',
+        'title': 'Learning Outcomes',
+        'description': 'Rate how much you agree with each statement about what you learned from this challenge.',
+        'questions': [
+            {
+                'id': 'lo_ratings',
+                'type': 'likert_group',
+                'label': 'Rate each statement (1 = Strongly Disagree, 5 = Strongly Agree):',
+                'statements': statements,
+            },
+        ],
+    }
+
+
 _LIKERT_SECTION = {
     'id': 'b2',
     'title': 'B2 · Hint Quality Rating',
@@ -238,7 +274,34 @@ PRE_STUDY = {
 # Post-Challenge Surveys
 # ---------------------------------------------------------------------------
 
-def _challenge(num_str, name, core_concept, b1_questions):
+def _challenge(num_str, name, core_concept, b1_questions, lo_ids=None):
+    sections = [
+        {
+            'id': 'meta',
+            'title': f'Challenge {num_str} · {name}',
+            'questions': [
+                {'id': 'core_concept_display', 'type': 'display',
+                 'label': 'Core Concept', 'value': core_concept},
+                {
+                    'id': 'completed',
+                    'label': 'Completed?',
+                    'type': 'radio',
+                    'options': ['Yes, fully', 'Partially', 'Did not complete'],
+                    'required': True,
+                },
+                {'id': 'time_spent', 'label': 'Time spent (minutes)', 'type': 'number', 'required': True},
+            ],
+        },
+        {
+            'id': 'b1',
+            'title': 'B1 · Post-Challenge Knowledge Test',
+            'description': 'Answer from memory. Do not look anything up.',
+            'questions': b1_questions,
+        },
+        _LIKERT_SECTION,
+    ]
+    if lo_ids:
+        sections.append(_lo_section(lo_ids))
     return {
         'id': f'ctf_{num_str}',
         'label': f'CTF {num_str}',
@@ -246,31 +309,7 @@ def _challenge(num_str, name, core_concept, b1_questions):
         'challenge_name': name,
         'core_concept': core_concept,
         'description': 'Complete immediately after finishing the challenge. Estimated time: 5–8 minutes.',
-        'sections': [
-            {
-                'id': 'meta',
-                'title': f'Challenge {num_str} · {name}',
-                'questions': [
-                    {'id': 'core_concept_display', 'type': 'display',
-                     'label': 'Core Concept', 'value': core_concept},
-                    {
-                        'id': 'completed',
-                        'label': 'Completed?',
-                        'type': 'radio',
-                        'options': ['Yes, fully', 'Partially', 'Did not complete'],
-                        'required': True,
-                    },
-{'id': 'time_spent', 'label': 'Time spent (minutes)', 'type': 'number', 'required': True},
-                ],
-            },
-            {
-                'id': 'b1',
-                'title': 'B1 · Post-Challenge Knowledge Test',
-                'description': 'Answer from memory. Do not look anything up.',
-                'questions': b1_questions,
-            },
-            _LIKERT_SECTION,
-        ],
+        'sections': sections,
     }
 
 
@@ -296,7 +335,7 @@ CHALLENGES = [
             'The stdout output that the program would print at the found state'),
         _sa('b1_q4',
             "Q4. A classmate says: 'I could brute-force all possible inputs instead of using angr.' What specific property of complex_function makes brute-forcing impractical, and how does symbolic execution sidestep this limitation?"),
-    ]),
+    ], lo_ids=['LO1']),
 
     _challenge('01', '01_angr_avoid', 'Pruning failing execution states using the avoid parameter', [
         _mc('b1_q1',
@@ -319,7 +358,7 @@ CHALLENGES = [
             'A single integer representing the number of instructions executed'),
         _sa('b1_q4',
             "Q4. Describe what happens internally to a simulation state when it reaches an avoid address. Why is this behavior critical when analyzing binaries with many 'failure' output branches?"),
-    ]),
+    ], lo_ids=['LO1']),
 
     _challenge('02', '02_angr_find_condition', 'Using Python predicate functions instead of raw addresses for exploration termination', [
         _mc('b1_q1',
@@ -342,7 +381,7 @@ CHALLENGES = [
             'list — you must join() the list before any string comparison'),
         _sa('b1_q4',
             "Q4. A binary prints 'ACCESS GRANTED\\n' on success and 'ACCESS DENIED\\n' on failure. Write out the is_successful and should_abort functions (in Python or clear pseudocode) you would use with simulation.explore() for this binary."),
-    ]),
+    ], lo_ids=['LO2']),
 
     _challenge('03', '03_angr_symbolic_registers', 'Manually creating symbolic bitvectors and attaching them to registers', [
         _mc('b1_q1',
@@ -365,7 +404,7 @@ CHALLENGES = [
             'solver.eval() is required only for memory-injected symbols, not register-injected ones'),
         _sa('b1_q4',
             "Q4. Explain why the blank_state address you choose must be the instruction immediately after get_user_input() returns — not the first instruction of get_user_input() itself. What goes wrong if you use the function's entry point?"),
-    ]),
+    ], lo_ids=['LO1', 'LO4']),
 
     _challenge('04', '04_angr_symbolic_stack', 'Reconstructing a stack frame and placing symbolic values at correct ebp offsets', [
         _mc('b1_q1',
@@ -388,7 +427,7 @@ CHALLENGES = [
             'Padding only appears in 64-bit binaries and is irrelevant for 32-bit CTF challenges'),
         _sa('b1_q4',
             'Q4. A student tries to solve this challenge by starting execution at the very beginning of handle_user() and letting angr process the stack setup. Describe one specific reason this approach is likely to fail or be extremely slow.'),
-    ]),
+    ], lo_ids=['LO1', 'LO3', 'LO4']),
 
     _challenge('05', '05_angr_symbolic_memory', 'Storing symbolic bitvectors at global memory addresses via initial_state.memory.store()', [
         _mc('b1_q1',
@@ -411,7 +450,7 @@ CHALLENGES = [
             'It is functionally identical — cast_to=bytes is just an optional style preference'),
         _sa('b1_q4',
             'Q4. Compare the memory injection in 05_angr_symbolic_memory with the register injection in 03_angr_symbolic_registers. What is fundamentally different about where symbols are stored, and why does that change which angr API calls you use?'),
-    ]),
+    ], lo_ids=['LO1', 'LO3']),
 
     _challenge('06', '06_angr_symbolic_dynamic_memory', "Simulating malloc'd buffers using fixed arbitrary addresses and redirected pointers", [
         _mc('b1_q1',
@@ -434,7 +473,7 @@ CHALLENGES = [
             "The gap must always be a power of 2 due to angr's memory alignment requirements"),
         _sa('b1_q4',
             "Q4. Explain the two-step process for simulating a malloc'd buffer in angr: (1) what you do with an arbitrary address, and (2) what you must do with the original pointer variable in the program. Why are both steps necessary?"),
-    ]),
+    ], lo_ids=['LO2', 'LO3', 'LO4', 'LO5']),
 
     _challenge('07', '07_angr_symbolic_file', "Creating a SimFile with symbolic content and inserting it into angr's simulated filesystem", [
         _mc('b1_q1',
@@ -457,7 +496,7 @@ CHALLENGES = [
             'Use an unconstrained size and let angr determine the correct length during exploration'),
         _sa('b1_q4',
             'Q4. Trace the flow of symbolic data in 07_angr_symbolic_file from the point you create the claripy.BVS symbol to the point the solver produces a concrete solution. Name each step and the angr component involved at each stage.'),
-    ]),
+    ], lo_ids=['LO4', 'LO6']),
 
     _challenge('08', '08_angr_constraints', 'Adding explicit equality constraints to bypass character-by-character check functions', [
         _mc('b1_q1',
@@ -480,7 +519,7 @@ CHALLENGES = [
             "It reads the answer directly from the binary's initialized data segment"),
         _sa('b1_q4',
             'Q4. Without the constraint, angr explores exponentially many paths through the character-by-character check. Explain in your own words why adding one equality constraint at the right point collapses all those paths into one tractable problem.'),
-    ]),
+    ], lo_ids=['LO1', 'LO2', 'LO7']),
 
     _challenge('09', '09_angr_hooks', 'Replacing a problematic function with a Python hook to intercept symbolic comparisons', [
         _mc('b1_q1',
@@ -503,7 +542,7 @@ CHALLENGES = [
             'There is no meaningful difference — hooks and constraints are interchangeable strategies'),
         _sa('b1_q4',
             'Q4. Compare the strategy in 08 (adding a constraint) with 09 (using a hook). In what type of situation would you prefer hooks over constraints? Provide a concrete example beyond what was covered in these two challenges.'),
-    ]),
+    ], lo_ids=['LO7', 'LO8']),
 
     _challenge('10', '10_angr_simprocedures', 'Using SimProcedure classes for scalable function replacement across many call sites', [
         _mc('b1_q1',
@@ -526,7 +565,7 @@ CHALLENGES = [
             'claripy.If is only needed when the return value is larger than 32 bits'),
         _sa('b1_q4',
             'Q4. Describe a realistic reverse engineering scenario (outside of CTF) where SimProcedures would be essential. What function would you replace, what behavior would your SimProcedure implement, and why would symbolic execution alone be insufficient?'),
-    ]),
+    ], lo_ids=['LO8']),
 
     _challenge('11', '11_angr_sim_scanf', 'Writing a custom SimProcedure to handle multi-format-specifier scanf calls', [
         _mc('b1_q1',
@@ -691,8 +730,94 @@ CHALLENGES = [
 ]
 
 # ---------------------------------------------------------------------------
+# Post-Study Survey (Form B — after all CTFs complete)
+# ---------------------------------------------------------------------------
+
+POST_STUDY = {
+    'id': 'post_study',
+    'label': 'Post-Study',
+    'title': 'Post-Study Knowledge Test — Form B',
+    'description': '⚑ Complete AFTER finishing all CTF challenges. Do NOT use any external resources. Estimated time: 12–15 minutes.',
+    'sections': [
+        {
+            'id': 'c1',
+            'title': 'Section C1 · FORM B — Post-Study Knowledge Test',
+            'description': 'This test uses different questions from Form A but tests the same concepts at the same difficulty level. Your responses allow us to calculate your learning gain across the study.',
+            'questions': [
+                _heading('Part I — Multiple Choice  (Questions 1–10) — Select the single best answer.'),
+                _mc('c1_q1',
+                    "Q1. A student says 'I could just run the binary with lots of random inputs.' What does symbolic execution offer that random testing fundamentally cannot?",
+                    'Symbolic execution is always faster than running the binary repeatedly',
+                    'Symbolic execution treats inputs as mathematical variables and reasons about all possible values at once, guaranteeing coverage of paths that random inputs might never reach',
+                    'Symbolic execution patches the binary so it accepts any input',
+                    'Symbolic execution eliminates the need to load the binary into memory'),
+                _mc('c1_q2',
+                    'Q2. After calling simulation.explore(find=0x804867a), what does simulation.found contain if exploration succeeds?',
+                    'A list of all memory addresses visited during exploration',
+                    'A list of simulation states that reached the find address, each holding the symbolic input and constraints accumulated on that path',
+                    'The disassembly listing of the path taken to reach the find address',
+                    'A single integer representing the number of steps taken'),
+                _mc('c1_q3',
+                    "Q3. You call claripy.BVS('password', 32) to create a symbol. Which statement best describes what this object represents at the start of exploration?",
+                    'A fixed 32-bit integer with the value zero',
+                    'An unconstrained 32-bit symbolic value that can take any value; constraints are added as angr explores paths that depend on it',
+                    'A pointer to 32 bytes of memory in the simulated process',
+                    'A 32-character ASCII string pre-filled with null bytes'),
+                _mc('c1_q4',
+                    'Q4. A binary has a loop that runs 32 times, each iteration branching based on whether buffer[i] equals a specific value. Why does this cause path explosion?',
+                    "Loops are not supported by angr's symbolic engine",
+                    "Each branch doubles the number of active states; after 32 iterations this produces up to 2^32 states — far more than any machine can manage",
+                    "The loop overwrites angr's internal constraint table on each iteration",
+                    'angr cannot handle integer comparisons inside loops'),
+                _mc('c1_q5',
+                    "Q5. A binary prints 'Access Denied' at 0x8048700 and 'Access Granted' at 0x804867a. Which explore() call correctly finds the granting input while pruning denial paths?",
+                    'simulation.explore(find=0x8048700, avoid=0x804867a)',
+                    'simulation.explore(find=0x804867a, avoid=0x8048700)',
+                    'simulation.explore(avoid=0x804867a)',
+                    'simulation.explore(find=0x8048700)'),
+                _mc('c1_q6',
+                    "Q6. You are solving a challenge where get_user_input() uses a complex formatted scanf that angr cannot handle automatically. You decide to start execution after the function returns. What is the correct approach?",
+                    'Use entry_state() and set a breakpoint at the return address',
+                    'Use blank_state(addr=address_after_return) and manually store symbolic bitvectors into the registers or memory locations where get_user_input() would have placed its results',
+                    'Use entry_state() with veritesting=True to skip through the input function automatically',
+                    'Hook get_user_input() with an empty SimProcedure that returns immediately'),
+                _mc('c1_q7',
+                    'Q7. After successful exploration, why can you not simply print the symbolic variable password0 directly to get the solution?',
+                    'Symbolic variables are not Python objects and cannot be passed to print()',
+                    'password0 is a symbolic object representing potentially many values; you must call solver.eval() to find a concrete value consistent with all constraints accumulated during exploration',
+                    'print() only accepts bytes objects, so you must encode the variable first',
+                    "The variable is stored in angr's internal memory and is inaccessible from Python"),
+                _mc('c1_q8',
+                    'Q8. A function check_equals is called 256 times in a binary, each call creating branching constraints that cause state explosion. What is the most scalable angr solution?',
+                    'Call simulation.explore() with a very high step limit to wait out the explosion',
+                    'Create a SimProcedure class with a run() method that performs the comparison symbolically, then use hook_symbol to replace every call to check_equals at once',
+                    'Add a manual constraint after each of the 256 calls using a loop in the scaffold script',
+                    'Use blank_state() to start execution after all 256 calls have already executed'),
+                _mc('c1_q9',
+                    'Q9. In 04_angr_symbolic_stack, password0 is at ebp-0xc and password1 is at ebp-0x10. You set %ebp and %esp to the same location, then push symbols. Which push order is correct and why?',
+                    'Push password1 first, then password0 — alphabetical order is required by angr',
+                    'Push password0 first, then password1 — the stack grows downward, so pushing password0 first places it at a higher address (ebp-0xc) and password1 ends up at the lower address (ebp-0x10), matching the variable layout',
+                    'The order does not matter as long as you set the correct register values afterward',
+                    'Push password1 first — the last push always lands at the lower offset from ebp'),
+                _mc('c1_q10',
+                    'Q10. Veritesting helps with the 12_angr_veritesting challenge but is not needed for most earlier challenges. What specific program structure makes veritesting beneficial in that challenge?',
+                    'The binary uses a shared library that angr cannot follow without state merging',
+                    'A loop runs 32 times checking each character of the buffer, creating up to 2^32 states with standard exploration; veritesting merges states that pass through the same loop body, collapsing the explosion',
+                    'The binary is statically linked, requiring veritesting to reconstruct libc calls',
+                    'The scanf call uses multiple format specifiers that angr cannot handle without merging'),
+                _heading('Part II — Short Answer  (Questions 11–12) — Answer in your own words, 3–5 sentences.'),
+                _sa('c1_q11',
+                    'Q11. A binary applies three transformations to user input (subtract 3, add 15, multiply by 7) before checking the result. Explain how constraint propagation allows angr to work backwards from the desired output to find the correct input, without running the binary with every possible value.'),
+                _sa('c1_q12',
+                    "Q12. You are analyzing a binary that prints 'WELCOME ADMIN' anywhere in a 200-byte output string mixed with other text. Explain why a raw address is insufficient as a find condition here, and write out (in pseudocode or Python) the is_successful function you would use instead."),
+            ],
+        },
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # Combined lookup
 # ---------------------------------------------------------------------------
 
-SURVEY_LIST = [PRE_STUDY] + CHALLENGES
+SURVEY_LIST = [PRE_STUDY] + CHALLENGES + [POST_STUDY]
 SURVEYS = {s['id']: s for s in SURVEY_LIST}

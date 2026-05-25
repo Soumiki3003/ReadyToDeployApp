@@ -19,7 +19,7 @@ from .knowledge import (
     RootKnowledge,
 )
 from .chat import ChatMessage, ChatMessageRole
-from .user import User, UserRole, UserTrajectory, HintApprovalStatus
+from .user import User, UserRole, UserTrajectory, HintApprovalStatus, SurveyCompletion
 
 __all__ = [
     "ChatMessage",
@@ -46,4 +46,5 @@ __all__ = [
     "Knowledge",
     "KnowledgeUploadRecord",
     "KnowledgeUploadStatus",
+    "SurveyCompletion",
 ]

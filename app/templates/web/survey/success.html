@@ -1,12 +1,42 @@
 {% extends "base_app.html" %}
 {% block title %}Survey Submitted — KnowledgeGraph{% endblock %}
 
+{% set is_post_study_complete = (success and survey.id == 'post_study') %}
+
+{% block head %}
+{% if is_post_study_complete %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="max-w-md mx-auto mt-12">
     <div class="card bg-base-100 shadow-sm text-center">
         <div class="card-body items-center gap-4 py-10">
 
-            {% if success %}
+            {% if is_post_study_complete %}
+
+            <div id="confetti-trigger" class="text-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold">Congratulations!</h1>
+            <p class="text-base text-base-content/80 font-medium">
+                You have completed all 18 CTF challenges!
+            </p>
+            <p class="text-sm text-base-content/60">
+                Your Post-Study survey has been received. Thank you for participating in the study!
+            </p>
+            <a href="{{ url_for('course.dashboard') }}" class="btn btn-primary mt-2 gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Back to Courses
+            </a>
+
+            {% elif success %}
+
             <div class="text-success">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -16,7 +46,19 @@
             <p class="text-sm text-base-content/70">
                 Your responses for <strong>{{ survey.title }}</strong> have been received and emailed to your instructor.
             </p>
+            <div class="flex gap-2 mt-2">
+                {% if course_id %}
+                <a href="{{ url_for('course.chat', course_id=course_id) }}" class="btn btn-primary btn-sm">
+                    Continue to Course
+                </a>
+                {% endif %}
+                <a href="{{ url_for('course.dashboard') }}" class="btn btn-ghost btn-sm">
+                    Back to Courses
+                </a>
+            </div>
+
             {% else %}
+
             <div class="text-error">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -29,12 +71,34 @@
             {% if error %}
             <p class="text-xs text-error/70 font-mono bg-error/10 rounded px-3 py-2 w-full text-left">{{ error }}</p>
             {% endif %}
-            {% endif %}
-
-            <a href="{{ url_for('course.dashboard') }}" class="btn btn-primary btn-sm mt-2">
+            <a href="{{ url_for('course.dashboard') }}" class="btn btn-ghost btn-sm mt-2">
                 Back to Courses
             </a>
+
+            {% endif %}
+
         </div>
     </div>
 </div>
+
+{% if is_post_study_complete %}
+<script>
+    (function launchConfetti() {
+        const count = 250;
+        const defaults = { origin: { y: 0.6 } };
+        function fire(particleRatio, opts) {
+            confetti(Object.assign({}, defaults, opts, {
+                particleCount: Math.floor(count * particleRatio),
+            }));
+        }
+        fire(0.25, { spread: 26, startVelocity: 55 });
+        fire(0.2,  { spread: 60 });
+        fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+        fire(0.1,  { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+        fire(0.1,  { spread: 120, startVelocity: 45 });
+        setTimeout(() => confetti({ angle: 60,  spread: 55, particleCount: 80, origin: { x: 0 } }), 600);
+        setTimeout(() => confetti({ angle: 120, spread: 55, particleCount: 80, origin: { x: 1 } }), 800);
+    })();
+</script>
+{% endif %}
 {% endblock %}

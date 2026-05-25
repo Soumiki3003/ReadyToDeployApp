@@ -161,4 +161,43 @@
     {% else %}
     <p class="text-center text-base-content/50 py-4">No questions recorded for this student yet.</p>
     {% endif %}
+
+    <!-- ── CTF Chat Viewer ──────────────────────────────────────────────── -->
+    <div class="mt-6">
+        <div class="divider text-xs text-base-content/40">Chat History by Challenge</div>
+        <div class="flex flex-wrap gap-1 mb-3">
+            {% for i in range(18) %}
+            <button
+                class="btn btn-xs btn-outline ctf-chat-btn"
+                data-stage="{{ i + 1 }}"
+                hx-get="/course/{{ course_id }}/api/student-chat/{{ student_id }}?stage={{ i + 1 }}"
+                hx-target="#student-chat-panel"
+                hx-swap="innerHTML"
+                hx-indicator="#chat-loading"
+                onclick="setActiveCTFBtn(this)"
+            >
+                CTF-{{ '%02d' | format(i) }}
+            </button>
+            {% endfor %}
+        </div>
+        <div class="relative rounded-box border border-base-300 bg-base-50 min-h-[80px]">
+            <div id="chat-loading" class="htmx-indicator absolute inset-0 flex items-center justify-center bg-base-100/70 rounded-box z-10">
+                <span class="loading loading-spinner loading-sm text-primary"></span>
+            </div>
+            <div id="student-chat-panel" class="p-3">
+                <p class="text-xs text-base-content/40 text-center py-4">Select a CTF above to view this student's chat.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function setActiveCTFBtn(btn) {
+        document.querySelectorAll('.ctf-chat-btn').forEach(function(b) {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-outline');
+        });
+        btn.classList.remove('btn-outline');
+        btn.classList.add('btn-primary');
+    }
+    </script>
 {% endif %}
